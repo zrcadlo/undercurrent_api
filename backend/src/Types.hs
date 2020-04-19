@@ -37,7 +37,7 @@ data EnvConfig = EnvConfig
   , databaseUrl :: DatabaseUrl
   } deriving (Generic, Show)
 
-instance DefConfig EnvConfig where
-  defConfig = EnvConfig 3000 "postgresql://localhost/undercurrent_dev?user=luis"
+defaultConfig :: EnvConfig
+defaultConfig = EnvConfig 3000 "postgresql://localhost/undercurrent_dev?user=luis"
 
 instance FromEnv EnvConfig

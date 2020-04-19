@@ -5,21 +5,19 @@ module Main (main) where
 
 import           Import
 import           Run
-import           System.Envy (decodeEnv)
+import           System.Envy (decodeWithDefaults)
 
 main :: IO ()
 main = do
   lo <- logOptionsHandle stderr False
-  env <- decodeEnv :: IO (Either String EnvConfig)
+  -- default to local db, port 3000 (see Types.hs)
+  env <- decodeWithDefaults defaultConfig
   withLogFunc lo $ \lf ->
     let app = App
           { appLogFunc = lf
           -- TODO: setting these to "impossible" values for now, there's gotta
           -- be a cleaner way!
-          , appPort = 0
-          , appDatabaseUrl = ""
+          , appPort = port env
+          , appDatabaseUrl = databaseUrl env
           }
-     in
-      case env of
-        Left e       -> runRIO app $ logError $ fromString $ e
-        Right config -> runRIO app{ appPort = port config, appDatabaseUrl = databaseUrl config } run
+     in runRIO app run
