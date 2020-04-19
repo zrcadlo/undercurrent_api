@@ -2,8 +2,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Run (run) where
 
-import Import
+import           Import
 
 run :: RIO App ()
 run = do
-  logInfo "We're inside the application!"
+  env <- ask
+  let p = view portL env
+  let db = view databaseUrlL env
+  logInfo $ fromString $ "Running on: " ++ (show p) ++ " connected to " ++ (show db)

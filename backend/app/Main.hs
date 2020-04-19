@@ -1,32 +1,25 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Main (main) where
 
-import Import
-import Run
-import RIO.Process
-import Options.Applicative.Simple
-import qualified Paths_undercurrent_api
+import           Import
+import           Run
+import           System.Envy (decodeEnv)
 
 main :: IO ()
 main = do
-  (options, ()) <- simpleOptions
-    $(simpleVersion Paths_undercurrent_api.version)
-    "Header for command line arguments"
-    "Program description, also for command line arguments"
-    (Options
-       <$> switch ( long "verbose"
-                 <> short 'v'
-                 <> help "Verbose output?"
-                  )
-    )
-    empty
-  lo <- logOptionsHandle stderr (optionsVerbose options)
-  pc <- mkDefaultProcessContext
+  lo <- logOptionsHandle stderr False
+  env <- decodeEnv :: IO (Either String EnvConfig)
   withLogFunc lo $ \lf ->
     let app = App
           { appLogFunc = lf
-          , appProcessContext = pc
-          , appOptions = options
+          -- TODO: setting these to "impossible" values for now, there's gotta
+          -- be a cleaner way!
+          , appPort = 0
+          , appDatabaseUrl = ""
           }
-     in runRIO app run
+     in
+      case env of
+        Left e       -> runRIO app $ logError $ fromString $ e
+        Right config -> runRIO app{ appPort = port config, appDatabaseUrl = databaseUrl config } run

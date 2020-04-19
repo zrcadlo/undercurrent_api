@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e0c7ad74d89ca588364fa7df2f28c5b78e04973b5aa725dd085fb445deef9e34
+-- hash: 916f8c3ee06343f8c825db3bd97d87219169afe03e567d2a98b603b2d6108ded
 
 name:           undercurrent-api
 version:        0.1.0.0
@@ -37,8 +37,17 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.11 && <10
+      aeson
+    , base >=4.11 && <10
+    , envy
     , rio >=0.1.12.0
+    , servant
+    , servant-auth
+    , servant-auth-server
+    , servant-server
+    , text
+    , wai
+    , warp
   default-language: Haskell2010
 
 executable undercurrent-api-exe
@@ -49,10 +58,19 @@ executable undercurrent-api-exe
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.11 && <10
+      aeson
+    , base >=4.11 && <10
+    , envy
     , optparse-simple
     , rio >=0.1.12.0
+    , servant
+    , servant-auth
+    , servant-auth-server
+    , servant-server
+    , text
     , undercurrent-api
+    , wai
+    , warp
   default-language: Haskell2010
 
 test-suite undercurrent-api-test
@@ -65,8 +83,17 @@ test-suite undercurrent-api-test
       test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.11 && <10
+      aeson
+    , base >=4.11 && <10
+    , envy
     , hspec
     , rio >=0.1.12.0
+    , servant
+    , servant-auth
+    , servant-auth-server
+    , servant-server
+    , text
     , undercurrent-api
+    , wai
+    , warp
   default-language: Haskell2010

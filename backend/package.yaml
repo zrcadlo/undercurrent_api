@@ -22,6 +22,16 @@ description:         Please see the README on Github at <https://github.com/lfbo
 dependencies:
 - base >= 4.11 && < 10
 - rio >= 0.1.12.0
+- servant
+- servant-server
+- servant-auth
+- servant-auth-server
+- aeson
+- text
+- wai
+- warp
+- envy
+# TODO: look into dotenv (https://github.com/stackbuilders/dotenv-hs) and servant-swagger/servant-auth-swagger
 
 ghc-options:
 - -Wall
