@@ -31,6 +31,9 @@ dependencies:
 - wai
 - warp
 - envy
+- postgresql-simple
+- postgresql-simple-migration
+- opaleye
 # TODO: look into dotenv (https://github.com/stackbuilders/dotenv-hs) and servant-swagger/servant-auth-swagger
 
 ghc-options:
