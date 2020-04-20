@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 916f8c3ee06343f8c825db3bd97d87219169afe03e567d2a98b603b2d6108ded
+-- hash: 8147469eaf7a4ff1c8742bd0ffb6d7bed4dc218f088a5f06f698cc4e0de4bc14
 
 name:           undercurrent-api
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
   exposed-modules:
       Import
       Run
+      Server
       Types
       Util
   other-modules:

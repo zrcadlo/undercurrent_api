@@ -20,4 +20,4 @@ main = do
           , appPort = port env
           , appDatabaseUrl = databaseUrl env
           }
-     in runRIO app run
+     in startApp app
