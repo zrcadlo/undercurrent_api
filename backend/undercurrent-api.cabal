@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 40b67f073da9058b7cb764bb2981cc407542d3b1b96a8eb3dd39c77a3fa2d58b
+-- hash: cef57bbbd7251a7a575f2f2df10ccc15f16961a60cfe40f216aaa9ce75e8425d
 
 name:           undercurrent-api
 version:        0.1.0.0
@@ -41,9 +41,9 @@ library
       aeson
     , base >=4.11 && <10
     , envy
-    , opaleye
-    , postgresql-simple
-    , postgresql-simple-migration
+    , persistent
+    , persistent-postgresql
+    , persistent-template
     , rio >=0.1.12.0
     , servant
     , servant-auth
@@ -65,10 +65,10 @@ executable undercurrent-api-exe
       aeson
     , base >=4.11 && <10
     , envy
-    , opaleye
     , optparse-simple
-    , postgresql-simple
-    , postgresql-simple-migration
+    , persistent
+    , persistent-postgresql
+    , persistent-template
     , rio >=0.1.12.0
     , servant
     , servant-auth
@@ -94,9 +94,9 @@ test-suite undercurrent-api-test
     , base >=4.11 && <10
     , envy
     , hspec
-    , opaleye
-    , postgresql-simple
-    , postgresql-simple-migration
+    , persistent
+    , persistent-postgresql
+    , persistent-template
     , rio >=0.1.12.0
     , servant
     , servant-auth

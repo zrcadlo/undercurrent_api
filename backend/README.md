@@ -104,3 +104,13 @@ simple by just connecting within a handler, and disconnecting when done.
 Clean-looking implementation:
 
 https://gitlab.com/williamyaoh/haskell-orm-comparison/-/tree/master/opaleye-impl
+
+
+### Another database alternative
+
+Since we're not gonna be doing intense queries (and if we do, I'd rather do hand-rolled SQL,) Persistent seems like a nice enough solution: not a ton of crazy profunctor madness, just good ol' TH:
+
+https://github.com/parsonsmatt/servant-persistent
+https://github.com/haskell-servant/example-servant-persistent
+
+
