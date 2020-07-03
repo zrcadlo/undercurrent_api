@@ -1,5 +1,23 @@
 # undercurrent-api
 
+## Setup
+
+To install Haskell (`ghc` and `cabal`,) install [`ghcup`](https://www.haskell.org/ghcup/) and don't forget to add
+its `env` to your `$PATH`.
+
+You'll also want [`stack`](https://docs.haskellstack.org/en/stable/README/)
+
+### [OPTIONAL] IDE setup
+
+See instructions in the [official `haskell-language-server` repo](https://github.com/haskell/haskell-language-server#installation), but the tl;dr
+is to clone it and then run
+
+    stack ./install.hs hls
+
+We used the [`implicit-hie`](https://github.com/Avi-D-coder/implicit-hie) tool
+to generate the `hie.yaml` file, for the express benefit of the haskell language
+server.
+
 ## Execute  
 
 * Run `stack exec -- undercurrent-api-exe` to see "We're inside the application!"

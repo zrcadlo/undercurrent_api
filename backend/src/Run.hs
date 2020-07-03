@@ -4,7 +4,6 @@ module Run (startApp) where
 
 
 import           Import
-import           Network.Wai
 import           Network.Wai.Handler.Warp
 import           Server                   (app)
 

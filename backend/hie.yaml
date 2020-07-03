@@ -1,0 +1,13 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:undercurrent-api"
+
+    - path: "app/Main.hs"
+      component: "undercurrent-api:exe:undercurrent-api-exe"
+
+    - path: "app/Paths_undercurrent_api.hs"
+      component: "undercurrent-api:exe:undercurrent-api-exe"
+
+    - path: "test"
+      component: "undercurrent-api:test:undercurrent-api-test"
