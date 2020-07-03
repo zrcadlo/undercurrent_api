@@ -31,6 +31,10 @@ dependencies:
 - wai
 - warp
 - envy
+- persistent
+- persistent-template
+- persistent-postgresql
+
 # TODO: look into dotenv (https://github.com/stackbuilders/dotenv-hs) and servant-swagger/servant-auth-swagger
 
 ghc-options:
