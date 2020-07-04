@@ -12,9 +12,9 @@ import           Servant.API
 import Models
 import Database.Persist.Postgresql (getBy, Entity(..))
 
-type Api = "api" :>
-  "hello" :> Get '[JSON] [Int]
-  :<|> "user" :> Get '[JSON] UserAccount
+type Api = 
+       "api" :> "hello" :> Get '[JSON] [Int] 
+  :<|> "api" :> "user"  :> Get '[JSON] UserAccount
 
 type AppM = ReaderT App Servant.Handler
 
