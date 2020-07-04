@@ -11,7 +11,7 @@ import qualified Paths_undercurrent_api
 import Models (runMigrations)
 import Database.Persist.Postgresql (runSqlPool)
 import Servant.Server (Context(..))
-import Servant.Auth.Server (generateKey, defaultCookieSettings, defaultJWTSettings)
+import Servant.Auth.Server (readKey, defaultCookieSettings, defaultJWTSettings)
 
 data Options = Options
   {
@@ -35,10 +35,10 @@ main = do
   -- http://hackage.haskell.org/package/servant-auth-server-0.4.5.1/docs/Servant-Auth-Server.html#v:readKey
   -- or a secret from env:
   -- http://hackage.haskell.org/package/servant-auth-server-0.4.5.1/docs/Servant-Auth-Server.html#v:fromSecret
-  jwtKey <- generateKey
   lo <- logOptionsHandle stderr False
   -- default to local db, port 3000 (see Types.hs)
   env <- decodeWithDefaults defaultConfig
+  jwtKey <- readKey $ jwtPath env
   pool <- makeDBConnectionPool $ databaseUrl env
   withLogFunc lo $ \lf ->
     let app = App

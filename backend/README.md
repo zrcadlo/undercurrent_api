@@ -18,6 +18,19 @@ We used the [`implicit-hie`](https://github.com/Avi-D-coder/implicit-hie) tool
 to generate the `hie.yaml` file, for the express benefit of the haskell language
 server.
 
+## Environment variables:
+
+* `DATABASE_URL` defaults to a local DB called `undercurrent_dev`
+* `PORT` defaults to `3000`
+* `JWT_PATH` defaults to `JWT.key`
+
+To generate `JWT.key` at the root of the directory, go to a repl (via `stack ghci`) and run:
+
+```
+*Main Import Models Run Server Types Util Servant.Auth.Server> import Servant.Auth.Server (writeKey)
+*Main Import Models Run Server Types Util Servant.Auth.Server Servant.Auth.Server> writeKey "JWT.key"
+```
+
 ## Execute  
 
 * Run `stack exec -- undercurrent-api-exe` to see "We're inside the application!"

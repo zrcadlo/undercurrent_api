@@ -54,10 +54,11 @@ instance HasDBConnectionPool App where
 data EnvConfig = EnvConfig
   { port        :: Port
   , databaseUrl :: DatabaseUrl
+  , jwtPath     :: FilePath
   } deriving (Generic, Show)
 
 defaultConfig :: EnvConfig
-defaultConfig = EnvConfig 3000 "postgresql://localhost/undercurrent_dev?user=luis"
+defaultConfig = EnvConfig 3000 "postgresql://localhost/undercurrent_dev?user=luis" "JWT.key"
 
 instance FromEnv EnvConfig
 

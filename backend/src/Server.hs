@@ -12,7 +12,7 @@ import Import
 import Models
 import Network.Wai
 import Servant
-import Servant.Auth.Server (JWT, throwAll, makeJWT, AuthResult(..), AuthResult, JWTSettings, CookieSettings, Auth, SetCookie)
+import Servant.Auth.Server (JWT, throwAll, makeJWT, AuthResult(..), AuthResult, JWTSettings, CookieSettings, Auth)
 import Data.Password (PasswordCheck(..))
 import RIO.ByteString.Lazy (toStrict)
 
@@ -72,7 +72,7 @@ createUser _ _ NewUserAccount {..} = do
     Just newUserId -> runDB $ getJust newUserId
 
 login :: CookieSettings -> JWTSettings -> Login -> AppM UserSession
-login cs jwts Login{..} = do
+login _ jwts Login{..} = do
   maybeUser <- runDB $ getBy $ UniqueEmail loginEmail
   case maybeUser of
     Nothing -> throwError $ err401 {errBody = "Invalid email."}
@@ -82,7 +82,7 @@ login cs jwts Login{..} = do
         PasswordCheckSuccess -> do
           token <- liftIO $ makeJWT (AuthenticatedUser (fromSqlKey userId)) jwts Nothing
           case token of
-            Left e -> throwError $ err401 {errBody = "Error generating JWT."}
+            Left _ -> throwError $ err401 {errBody = "Unable to generate JWT."}
             Right t -> return $ UserSession $ decodeUtf8Lenient $ toStrict t
 
 
