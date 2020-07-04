@@ -35,6 +35,8 @@ dependencies:
 - persistent-template
 - persistent-postgresql
 - monad-logger
+- password
+- password-instances
 
 # TODO: look into dotenv (https://github.com/stackbuilders/dotenv-hs) and servant-swagger/servant-auth-swagger
 
@@ -70,6 +72,9 @@ tests:
     dependencies:
     - undercurrent-api
     - hspec
+    - servant-client
+    - hspec-wai
+    - servant-quickcheck
 
     ghc-options:
     - -threaded

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: afb90ba2f10352f7d65b4f941c03f3d9043b19989a3c9149fd8efd7b743b3041
+-- hash: 25454b1e7cead9182d24ce9d35272c65b74a48dbc0bb01013d2453be1aa5d662
 
 name:           undercurrent-api
 version:        0.1.0.0
@@ -43,6 +43,8 @@ library
     , base >=4.11 && <10
     , envy
     , monad-logger
+    , password
+    , password-instances
     , persistent
     , persistent-postgresql
     , persistent-template
@@ -69,6 +71,8 @@ executable undercurrent-api-exe
     , envy
     , monad-logger
     , optparse-simple
+    , password
+    , password-instances
     , persistent
     , persistent-postgresql
     , persistent-template
@@ -97,7 +101,10 @@ test-suite undercurrent-api-test
     , base >=4.11 && <10
     , envy
     , hspec
+    , hspec-wai
     , monad-logger
+    , password
+    , password-instances
     , persistent
     , persistent-postgresql
     , persistent-template
@@ -105,6 +112,8 @@ test-suite undercurrent-api-test
     , servant
     , servant-auth
     , servant-auth-server
+    , servant-client
+    , servant-quickcheck
     , servant-server
     , text
     , undercurrent-api
