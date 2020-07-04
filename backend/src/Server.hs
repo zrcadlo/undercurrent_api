@@ -7,11 +7,12 @@
 module Server where
 
 import Data.Password.Argon2 (hashPassword)
-import Database.Persist.Postgresql (Entity (..), get, getBy, insert)
+import Database.Persist.Postgresql (getJust, Entity (..), get, getBy, insertUnique)
 import Import
 import Models
 import Network.Wai
 import Servant
+import RIO.Partial (fromJust)
 
 type Api =
   "api" :> "hello" :> Get '[JSON] [Int]
@@ -37,11 +38,10 @@ currentUser = do
 createUser :: NewUserAccount -> AppM UserAccount
 createUser NewUserAccount {..} = do
   hashedPw <- hashPassword password
-  newUserId <- runDB $ insert $ UserAccount email hashedPw name gender birthday birthplace Nothing Nothing
-  maybeNewUser <- runDB $ get newUserId
-  case maybeNewUser of
-    Nothing -> throwError $ err400 {errBody = "Unable to create user"}
-    Just newUser -> return newUser
+  maybeNewUserId <- runDB $ insertUnique $ UserAccount email hashedPw name gender birthday birthplace Nothing Nothing
+  case maybeNewUserId of
+    Nothing -> throwError $ err400 {errBody = "Unable to create user: duplicate email."}
+    Just newUserId -> runDB $ getJust newUserId
 
 apiServer :: ServerT Api AppM
 apiServer = hello :<|> currentUser :<|> createUser
