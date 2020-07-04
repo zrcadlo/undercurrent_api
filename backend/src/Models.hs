@@ -30,7 +30,7 @@ import           Data.Password.Argon2           ( Argon2
                                                 , hashPassword
                                                 , checkPassword
                                                 )
-import           Data.Aeson                     ( (.=)
+import           Data.Aeson                     (FromJSON,  (.=)
                                                 , object
                                                 , ToJSON(..)
                                                 )
@@ -41,10 +41,10 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
         password (PasswordHash Argon2)
         name Text
         gender Gender
-        birthday UTCTime
-        birthplace Text
-        createdAt UTCTime default=now()
-        updatedAt UTCTime default=now()
+        birthday UTCTime Maybe
+        birthplace Text Maybe
+        createdAt UTCTime Maybe default=now()
+        updatedAt UTCTime Maybe default=now()
         UniqueEmail email
         deriving Show
 |]
@@ -62,6 +62,17 @@ instance ToJSON UserAccount where
         , "birthday" .= userAccountBirthday e
         , "birthplace" .= userAccountBirthplace e
         ]
+
+data NewUserAccount = NewUserAccount
+    { name :: Text
+    , email :: Text
+    , gender :: Gender
+    , birthday :: Maybe UTCTime
+    , birthplace :: Maybe Text
+    , password :: Password
+    } deriving (Show, Generic)
+
+instance FromJSON NewUserAccount
 
 runMigrations :: ReaderT SqlBackend IO ()
 runMigrations = runMigration migrateAll
