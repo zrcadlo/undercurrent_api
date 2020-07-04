@@ -29,14 +29,35 @@ server.
 
 ## Notes
 
-### Running migrations (or other repl stuff)
+### Manual testing/exec
+
+#### Running migrations
 
 ```
--- stack ghci
-*Main Import Models Run Server Types Util Database.Persist.Postgresql> env <- initAppConfig
-*Main Import Models Run Server Types Util Database.Persist.Postgresql> let pool = appDBPool env
-*Main Import Models Run Server Types Util Database.Persist.Postgresql> runSqlPool runMigrations pool
+luis@mac-mini ~/c/z/u/backend (user-endpoints)> stack exec -- undercurrent-api-exe migrate
+Invalid argument `migrate'
+
+Usage: undercurrent-api-exe [--version] [--help] [-m|--migrate]
+  Start the server, or run migrations.
+luis@mac-mini ~/c/z/u/backend (user-endpoints) [1]> stack exec -- undercurrent-api-exe --migrate
+Migrating: CREATe TABLE "user_account"("id" SERIAL8  PRIMARY KEY UNIQUE,"email" VARCHAR NOT NULL,"password" VARCHAR NOT NULL,"name" VARCHAR NOT NULL,"gender" VARCHAR NOT NULL,"birthday" TIMESTAMP WITH TIME ZONE NULL,"birthplace" VARCHAR NULL,"created_at" TIMESTAMP WITH TIME ZONE NULL DEFAULT now(),"updated_at" TIMESTAMP WITH TIME ZONE NULL DEFAULT now())
+Migrating: ALTER TABLE "user_account" ADD CONSTRAINT "unique_email" UNIQUE("email")
 ```
+
+#### Creating users
+
+```
+curl -H "Content-Type: application/json" -vd '{"name": "Luis", "email": "luis@luis.luis", "gender": "Male", "birthday": "1989-01-06T04:30:00.000Z", "birthplace": "Tegucigalpa, Honduras", "password": "hunter2"}' localhost:3000/api/users
+```
+
+returns:
+
+```
+{"email":"luis@luis.luis","birthday":"1989-01-06T04:30:00Z","gender":"Male","name":"Luis","birthplace":"Tegucigalpa, Honduras"}
+```
+
+and the password in the DB has been correctly hashed (!)
+
 
 ### Running in context [SORTED OUT]
 

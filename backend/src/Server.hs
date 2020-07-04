@@ -12,7 +12,6 @@ import Import
 import Models
 import Network.Wai
 import Servant
-import RIO.Partial (fromJust)
 
 type Api =
   "api" :> "hello" :> Get '[JSON] [Int]
