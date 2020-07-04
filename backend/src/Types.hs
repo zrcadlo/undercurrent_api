@@ -11,6 +11,10 @@ import           System.Envy
 import Database.Persist.TH (derivePersistField)
 import Data.Aeson.Types (ToJSON, FromJSON)
 import Database.Persist.Postgresql (ConnectionPool)
+import RIO.Time (UTCTime)
+import Data.Password (Password)
+import Data.Password.Instances()
+import Servant.Auth.Server (FromJWT, ToJWT)
 
 type Port = Int
 
@@ -62,9 +66,40 @@ instance FromEnv EnvConfig
 -- makeDBConnectionPool :: DatabaseUrl -> RIO App ConnectionPool
 
 
--- Database-level types:
+-- Domain-specific types
+
 data Gender = Female | Male | NonBinary
       deriving (Show, Read, Eq, Generic)
 derivePersistField "Gender"
 instance ToJSON Gender
 instance FromJSON Gender
+
+data NewUserAccount = NewUserAccount
+    { name :: Text
+    , email :: Text
+    , gender :: Gender
+    , birthday :: Maybe UTCTime
+    , birthplace :: Maybe Text
+    , password :: Password
+    } deriving (Show, Generic)
+
+instance FromJSON NewUserAccount
+
+data AuthenticatedUser = AuthenticatedUser 
+  { 
+    auId    :: Int64
+  --, auEmail :: Text 
+  } deriving (Eq, Show, Read, Generic)
+
+instance ToJSON AuthenticatedUser
+instance ToJWT  AuthenticatedUser
+instance FromJSON AuthenticatedUser
+instance FromJWT AuthenticatedUser
+
+data Login = Login
+  {
+    loginEmail :: Text
+  , loginPassword :: Password  
+  } deriving (Show, Generic)
+
+instance FromJSON Login

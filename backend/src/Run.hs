@@ -12,7 +12,7 @@ import           Control.Monad.Logger           ( runNoLoggingT )
 import           Import
 import           Network.Wai.Handler.Warp
 import           Server                         ( app )
-import           Database.Persist.Postgresql    (runMigration, SqlBackend,  createPostgresqlPool
+import           Database.Persist.Postgresql    (createPostgresqlPool
                                                 , ConnectionPool
                                                 )
 import           System.Envy                    ( decodeWithDefaults )

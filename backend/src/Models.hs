@@ -22,15 +22,14 @@ import           Database.Persist.Postgresql    ( runSqlPool
                                                 , runMigration
                                                 , SqlBackend
                                                 )
-import           Data.Password                  ( Password
-                                                , PasswordHash(..)
+import           Data.Password                  ( PasswordHash(..)
                                                 )
 import           Data.Password.Instances        ( )
 import           Data.Password.Argon2           ( Argon2
-                                                , hashPassword
-                                                , checkPassword
+                                                
+                                                
                                                 )
-import           Data.Aeson                     (FromJSON,  (.=)
+import           Data.Aeson                     ((.=)
                                                 , object
                                                 , ToJSON(..)
                                                 )
@@ -62,17 +61,6 @@ instance ToJSON UserAccount where
         , "birthday" .= userAccountBirthday e
         , "birthplace" .= userAccountBirthplace e
         ]
-
-data NewUserAccount = NewUserAccount
-    { name :: Text
-    , email :: Text
-    , gender :: Gender
-    , birthday :: Maybe UTCTime
-    , birthplace :: Maybe Text
-    , password :: Password
-    } deriving (Show, Generic)
-
-instance FromJSON NewUserAccount
 
 runMigrations :: ReaderT SqlBackend IO ()
 runMigrations = runMigration migrateAll

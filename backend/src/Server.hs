@@ -7,7 +7,7 @@
 module Server where
 
 import Data.Password.Argon2 (hashPassword)
-import Database.Persist.Postgresql (getJust, Entity (..), get, getBy, insertUnique)
+import Database.Persist.Postgresql (getJust, Entity (..), getBy, insertUnique)
 import Import
 import Models
 import Network.Wai
@@ -32,7 +32,7 @@ currentUser = do
   logInfo $ fromString $ show maybeUser
   case maybeUser of
     Nothing -> throwError $ err404 {errBody = "User not found."}
-    Just (Entity userId user) -> return user
+    Just (Entity _ user) -> return user
 
 createUser :: NewUserAccount -> AppM UserAccount
 createUser NewUserAccount {..} = do
