@@ -43,8 +43,6 @@ main = do
   withLogFunc lo $ \lf ->
     let app = App
           { appLogFunc = lf
-          -- TODO: setting these to "impossible" values for now, there's gotta
-          -- be a cleaner way!
           , appPort = port env
           , appDatabaseUrl = databaseUrl env
           , appDBPool = pool

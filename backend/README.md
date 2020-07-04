@@ -58,6 +58,19 @@ returns:
 
 and the password in the DB has been correctly hashed (!)
 
+#### Login
+
+```
+curl -H "Content-Type: application/json" -vd '{"loginEmail": "luis@luis.luis", "loginPassword": "hunter2"}' localhost:3000/api/login
+> {"sessionToken":"eyJhbGciOiJIUzUxMiJ9.eyJkYXQiOnsiYXVJZCI6MX19.W1zF4p1-PmeZ-59WErTXdWDFyRDzfbtzw35Rnki2pQCJnoYVnGniwQ0ZTGrFYnnVz9hlG287f2iZmU4VKmZHTQ"}* Closing connection 0
+```
+
+Returns
+
+```
+ curl -H "Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJkYXQiOnsiYXVJZCI6MX19.W1zF4p1-PmeZ-59WErTXdWDFyRDzfbtzw35Rnki2pQCJnoYVnGniwQ0ZTGrFYnnVz9hlG287f2iZmU4VKmZHTQ" localhost:3000/api/user
+{"email":"luis@luis.luis","birthday":"1989-01-06T04:30:00Z","gender":"Male","name":"Luis","birthplace":"Tegucigalpa, Honduras"}
+```
 
 ### Running in context [SORTED OUT]
 
