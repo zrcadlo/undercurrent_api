@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cef57bbbd7251a7a575f2f2df10ccc15f16961a60cfe40f216aaa9ce75e8425d
+-- hash: afb90ba2f10352f7d65b4f941c03f3d9043b19989a3c9149fd8efd7b743b3041
 
 name:           undercurrent-api
 version:        0.1.0.0
@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Import
+      Models
       Run
       Server
       Types
@@ -41,6 +42,7 @@ library
       aeson
     , base >=4.11 && <10
     , envy
+    , monad-logger
     , persistent
     , persistent-postgresql
     , persistent-template
@@ -65,6 +67,7 @@ executable undercurrent-api-exe
       aeson
     , base >=4.11 && <10
     , envy
+    , monad-logger
     , optparse-simple
     , persistent
     , persistent-postgresql
@@ -94,6 +97,7 @@ test-suite undercurrent-api-test
     , base >=4.11 && <10
     , envy
     , hspec
+    , monad-logger
     , persistent
     , persistent-postgresql
     , persistent-template
