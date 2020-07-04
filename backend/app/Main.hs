@@ -10,6 +10,8 @@ import Options.Applicative.Simple
 import qualified Paths_undercurrent_api
 import Models (runMigrations)
 import Database.Persist.Postgresql (runSqlPool)
+import Servant.Server (Context(..))
+import Servant.Auth.Server (generateKey, defaultCookieSettings, defaultJWTSettings)
 
 data Options = Options
   {
@@ -29,7 +31,11 @@ main = do
                  )
     )
     empty
-
+  -- TODO: read key from a file/cfg:
+  -- http://hackage.haskell.org/package/servant-auth-server-0.4.5.1/docs/Servant-Auth-Server.html#v:readKey
+  -- or a secret from env:
+  -- http://hackage.haskell.org/package/servant-auth-server-0.4.5.1/docs/Servant-Auth-Server.html#v:fromSecret
+  jwtKey <- generateKey
   lo <- logOptionsHandle stderr False
   -- default to local db, port 3000 (see Types.hs)
   env <- decodeWithDefaults defaultConfig
@@ -43,7 +49,10 @@ main = do
           , appDatabaseUrl = databaseUrl env
           , appDBPool = pool
           }
+        jwtCfg = defaultJWTSettings jwtKey
+        cookieCfg = defaultCookieSettings
+        cfg = cookieCfg :. jwtCfg :. EmptyContext
      in if (optionsMigrate options) then 
         runSqlPool runMigrations pool
        else
-        startApp app
+        startApp cfg cookieCfg jwtCfg app

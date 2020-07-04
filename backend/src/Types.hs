@@ -103,3 +103,10 @@ data Login = Login
   } deriving (Show, Generic)
 
 instance FromJSON Login
+
+data UserSession = UserSession
+  {
+    sessionToken :: Text
+  } deriving (Show, Generic)
+
+instance ToJSON UserSession

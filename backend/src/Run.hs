@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Run
@@ -16,6 +17,8 @@ import           Database.Persist.Postgresql    (createPostgresqlPool
                                                 , ConnectionPool
                                                 )
 import           System.Envy                    ( decodeWithDefaults )
+import Servant.Server (Context)
+import Servant.Auth.Server (JWTSettings, CookieSettings)
 
 
 confirmRunning :: RIO App ()
@@ -30,10 +33,10 @@ confirmRunning = do
     ++ " connected to "
     ++ (show db)
 
-startApp :: App -> IO ()
-startApp env = do
+startApp :: Context '[CookieSettings, JWTSettings] -> CookieSettings -> JWTSettings -> App -> IO ()
+startApp cfg cs jwts env = do
   runRIO env confirmRunning
-  run (appPort env) $ app env
+  run (appPort env) $ app cfg cs jwts env
 
 makeDBConnectionPool :: DatabaseUrl -> IO ConnectionPool
 makeDBConnectionPool uri =
