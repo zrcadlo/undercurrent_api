@@ -16,7 +16,7 @@ import Servant
 import Servant.Auth.Server (FromJWT, ToJWT, JWT, throwAll, makeJWT, AuthResult(..), AuthResult, JWTSettings, CookieSettings, Auth)
 import Data.Password (PasswordCheck(..))
 import RIO.ByteString.Lazy (toStrict)
-import Data.Aeson (ToJSON, FromJSON)
+import Data.Aeson.Types
 import RIO.Time (getCurrentTime, UTCTime)
 import Data.Password (Password)
 import Data.Password.Instances()
@@ -51,7 +51,10 @@ data Login = Login
   , loginPassword :: Password  
   } deriving (Show, Generic)
 
-instance FromJSON Login
+-- customize JSON instances: https://artyom.me/aeson#generics-handling-weird-field-names-in-data
+instance FromJSON Login where
+  -- drop the "login_" prefix, so we just need to say `email` and `password`
+  parseJSON = genericParseJSON defaultOptions{fieldLabelModifier = drop 6 . camelTo2 '_'}
 
 data UserSession = UserSession
   {
@@ -59,7 +62,9 @@ data UserSession = UserSession
   , sessionUser  :: UserAccount
   } deriving (Show, Generic)
 
-instance ToJSON UserSession
+instance ToJSON UserSession where
+  -- drop the `session_` prefix, so we get `token` and `user`
+  toJSON = genericToJSON defaultOptions{fieldLabelModifier = drop 8 . camelTo2 '_'}
 
 -- | API types
 -- inspired by: https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
