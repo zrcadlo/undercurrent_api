@@ -1,23 +1,22 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeOperators     #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Server where
 
-import           Import
-import           Network.Wai
-import           Servant
-import           Servant.API
+import Data.Password.Argon2 (hashPassword)
+import Database.Persist.Postgresql (Entity (..), get, getBy, insert)
+import Import
 import Models
-import Database.Persist.Postgresql (insert, get, getBy, Entity(..))
-import Data.Password.Argon2  (hashPassword, checkPassword)
+import Network.Wai
+import Servant
 
-type Api = 
-       "api" :> "hello" :> Get '[JSON] [Int] 
-  :<|> "api" :> "user"  :> Get '[JSON] UserAccount
-  :<|> "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> Post '[JSON] UserAccount
+type Api =
+  "api" :> "hello" :> Get '[JSON] [Int]
+    :<|> "api" :> "user" :> Get '[JSON] UserAccount
+    :<|> "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> Post '[JSON] UserAccount
 
 type AppM = ReaderT App Servant.Handler
 
@@ -36,7 +35,7 @@ currentUser = do
     Just (Entity userId user) -> return user
 
 createUser :: NewUserAccount -> AppM UserAccount
-createUser NewUserAccount{..} = do
+createUser NewUserAccount {..} = do
   hashedPw <- hashPassword password
   newUserId <- runDB $ insert $ UserAccount email hashedPw name gender birthday birthplace Nothing Nothing
   maybeNewUser <- runDB $ get newUserId
@@ -54,5 +53,4 @@ nt :: App -> AppM a -> Servant.Handler a
 nt s x = runReaderT x s
 
 app :: App -> Application
-app c =  serve proxyApi $ hoistServer proxyApi (nt c) apiServer
-
+app c = serve proxyApi $ hoistServer proxyApi (nt c) apiServer
