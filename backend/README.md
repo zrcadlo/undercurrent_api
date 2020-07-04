@@ -29,6 +29,15 @@ server.
 
 ## Notes
 
+### Running migrations (or other repl stuff)
+
+```
+-- stack ghci
+*Main Import Models Run Server Types Util Database.Persist.Postgresql> env <- initAppConfig
+*Main Import Models Run Server Types Util Database.Persist.Postgresql> let pool = appDBPool env
+*Main Import Models Run Server Types Util Database.Persist.Postgresql> runSqlPool runMigrations pool
+```
+
 ### Running in context [SORTED OUT]
 
 Next:

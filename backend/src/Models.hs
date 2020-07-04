@@ -17,10 +17,10 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import RIO.Time (UTCTime)
-import Database.Persist.Postgresql (runMigration, SqlBackend)
+import Database.Persist.Postgresql (runSqlPool, runMigration, SqlBackend)
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
-    User json
+    UserAccount json
         name Text
         email Text
         password Text
@@ -34,3 +34,8 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 
 runMigrations :: ReaderT SqlBackend IO ()
 runMigrations = runMigration migrateAll
+
+runDB :: (MonadReader s m, HasDBConnectionPool s, MonadIO m) => ReaderT SqlBackend IO b -> m b
+runDB query = do
+    pool <- view dbConnectionPoolL
+    liftIO $ runSqlPool query pool 

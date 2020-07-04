@@ -9,9 +9,12 @@ import           Import
 import           Network.Wai
 import           Servant
 import           Servant.API
+import Models
+import Database.Persist.Postgresql (getBy, Entity(..))
 
 type Api = "api" :>
   "hello" :> Get '[JSON] [Int]
+  :<|> "user" :> Get '[JSON] UserAccount
 
 type AppM = ReaderT App Servant.Handler
 
@@ -20,8 +23,17 @@ hello = do
   logInfo "Running hello"
   return [42]
 
+currentUser :: AppM UserAccount
+currentUser = do
+  logInfo "Running current user"
+  maybeUser <- runDB $ getBy $ UniqueEmail "luis@luis.luis"
+  logInfo $ fromString $ show maybeUser
+  case maybeUser of
+    Nothing -> throwError $ err404 {errBody = "User not found."}
+    Just (Entity userId user) -> return user
+
 apiServer :: ServerT Api AppM
-apiServer = hello
+apiServer = hello :<|> currentUser
 
 proxyApi :: Proxy Api
 proxyApi = Proxy
