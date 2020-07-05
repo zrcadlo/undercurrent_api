@@ -91,13 +91,13 @@ instance ToJSON UserSession where
 
 type Protected = 
   "api" :> "user" :> Get '[JSON] UserAccount
-    :<|> "api" :> "user" :> ReqBody '[JSON] UpdateUserAccount :> Put '[JSON] NoContent
-    :<|> "api" :> "user" :> "password" :> ReqBody '[JSON] UpdatePassword :> Put '[JSON] NoContent
+    :<|> "api" :> "user" :> ReqBody '[JSON] UpdateUserAccount :> Verb 'PUT 204 '[JSON] NoContent
+    :<|> "api" :> "user" :> "password" :> ReqBody '[JSON] UpdatePassword :> Verb 'PUT 204 '[JSON] NoContent
 
 type Unprotected = 
   "api" :> "hello" :> Get '[JSON] [Int]
-    :<|> "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> Post '[JSON] UserSession
-    :<|> "api" :> "login" :> ReqBody '[JSON] Login :> Post '[JSON] UserSession
+    :<|> "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
+    :<|> "api" :> "login" :> ReqBody '[JSON] Login :> PostCreated '[JSON] UserSession
 
 type Api auths = (Auth auths AuthenticatedUser :> Protected) :<|> Unprotected
 

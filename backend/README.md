@@ -85,6 +85,14 @@ Returns
 {"email":"luis@luis.luis","birthday":"1989-01-06T04:30:00Z","gender":"Male","name":"Luis","birthplace":"Tegucigalpa, Honduras"}
 ```
 
+### Update users
+
+```
+curl -vH "Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJkYXQiOnsiYXVJZCI6Mn19.r5bQBAbkkM3EAJs2qdhyEQ5SbM-6KoH70AY1V-rTGsdpRLNDhh2EsHNAaqyi8q3h6n80zFXm6GZxLBPaVvgZuw" -X PUT -H "Content-Type: application/json" -d '{"name": "Tina Gong"}' localhost:3000/api/user
+```
+
+returns a 204 No Content.
+
 ### Running in context [SORTED OUT]
 
 Next:
