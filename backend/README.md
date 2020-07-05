@@ -188,3 +188,11 @@ https://github.com/parsonsmatt/servant-persistent
 https://github.com/haskell-servant/example-servant-persistent
 
 
+### Other references:
+
+* https://github.com/parsonsmatt/servant-persistent/tree/servant-0.4/src
+* https://docs.servant.dev/en/stable/cookbook/hoist-server-with-context/HoistServerWithContext.html
+* https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
+* https://github.com/cdepillabout/password/blob/86a678521140526f41dd751e92642742cb4cafd9/password/test/tasty/PBKDF2.hs
+* https://github.com/yesodweb/persistent/blob/master/docs/Persistent-entity-syntax.md
+* https://artyom.me/aeson#generics-handling-weird-field-names-in-data
