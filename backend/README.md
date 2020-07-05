@@ -18,6 +18,19 @@ We used the [`implicit-hie`](https://github.com/Avi-D-coder/implicit-hie) tool
 to generate the `hie.yaml` file, for the express benefit of the haskell language
 server.
 
+## Environment variables:
+
+* `DATABASE_URL` defaults to a local DB called `undercurrent_dev`
+* `PORT` defaults to `3000`
+* `JWT_PATH` defaults to `JWT.key`
+
+To generate `JWT.key` at the root of the directory, go to a repl (via `stack ghci`) and run:
+
+```
+*Main Import Models Run Server Types Util Servant.Auth.Server> import Servant.Auth.Server (writeKey)
+*Main Import Models Run Server Types Util Servant.Auth.Server Servant.Auth.Server> writeKey "JWT.key"
+```
+
 ## Execute  
 
 * Run `stack exec -- undercurrent-api-exe` to see "We're inside the application!"
@@ -28,6 +41,57 @@ server.
 `stack test`
 
 ## Notes
+
+### Manual testing/exec
+
+#### Running migrations
+
+```
+luis@mac-mini ~/c/z/u/backend (user-endpoints)> stack exec -- undercurrent-api-exe migrate
+Invalid argument `migrate'
+
+Usage: undercurrent-api-exe [--version] [--help] [-m|--migrate]
+  Start the server, or run migrations.
+luis@mac-mini ~/c/z/u/backend (user-endpoints) [1]> stack exec -- undercurrent-api-exe --migrate
+Migrating: CREATe TABLE "user_account"("id" SERIAL8  PRIMARY KEY UNIQUE,"email" VARCHAR NOT NULL,"password" VARCHAR NOT NULL,"name" VARCHAR NOT NULL,"gender" VARCHAR NOT NULL,"birthday" TIMESTAMP WITH TIME ZONE NULL,"birthplace" VARCHAR NULL,"created_at" TIMESTAMP WITH TIME ZONE NULL DEFAULT now(),"updated_at" TIMESTAMP WITH TIME ZONE NULL DEFAULT now())
+Migrating: ALTER TABLE "user_account" ADD CONSTRAINT "unique_email" UNIQUE("email")
+```
+
+#### Creating users
+
+```
+curl -H "Content-Type: application/json" -vd '{"name": "Luis", "email": "luis@luis.luis", "gender": "Male", "birthday": "1989-01-06T04:30:00.000Z", "birthplace": "Tegucigalpa, Honduras", "password": "hunter2"}' localhost:3000/api/users
+```
+
+returns:
+
+```
+{"email":"luis@luis.luis","birthday":"1989-01-06T04:30:00Z","gender":"Male","name":"Luis","birthplace":"Tegucigalpa, Honduras"}
+```
+
+and the password in the DB has been correctly hashed (!)
+
+#### Login
+
+```
+curl -H "Content-Type: application/json" -vd '{"loginEmail": "luis@luis.luis", "loginPassword": "hunter2"}' localhost:3000/api/login
+> {"sessionToken":"eyJhbGciOiJIUzUxMiJ9.eyJkYXQiOnsiYXVJZCI6MX19.W1zF4p1-PmeZ-59WErTXdWDFyRDzfbtzw35Rnki2pQCJnoYVnGniwQ0ZTGrFYnnVz9hlG287f2iZmU4VKmZHTQ"}* Closing connection 0
+```
+
+Returns
+
+```
+ curl -H "Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJkYXQiOnsiYXVJZCI6MX19.W1zF4p1-PmeZ-59WErTXdWDFyRDzfbtzw35Rnki2pQCJnoYVnGniwQ0ZTGrFYnnVz9hlG287f2iZmU4VKmZHTQ" localhost:3000/api/user
+{"email":"luis@luis.luis","birthday":"1989-01-06T04:30:00Z","gender":"Male","name":"Luis","birthplace":"Tegucigalpa, Honduras"}
+```
+
+### Update users
+
+```
+curl -vH "Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJkYXQiOnsiYXVJZCI6Mn19.r5bQBAbkkM3EAJs2qdhyEQ5SbM-6KoH70AY1V-rTGsdpRLNDhh2EsHNAaqyi8q3h6n80zFXm6GZxLBPaVvgZuw" -X PUT -H "Content-Type: application/json" -d '{"name": "Tina Gong"}' localhost:3000/api/user
+```
+
+returns a 204 No Content.
 
 ### Running in context [SORTED OUT]
 
@@ -132,3 +196,11 @@ https://github.com/parsonsmatt/servant-persistent
 https://github.com/haskell-servant/example-servant-persistent
 
 
+### Other references:
+
+* https://github.com/parsonsmatt/servant-persistent/tree/servant-0.4/src
+* https://docs.servant.dev/en/stable/cookbook/hoist-server-with-context/HoistServerWithContext.html
+* https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
+* https://github.com/cdepillabout/password/blob/86a678521140526f41dd751e92642742cb4cafd9/password/test/tasty/PBKDF2.hs
+* https://github.com/yesodweb/persistent/blob/master/docs/Persistent-entity-syntax.md
+* https://artyom.me/aeson#generics-handling-weird-field-names-in-data
