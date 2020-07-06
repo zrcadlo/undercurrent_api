@@ -12,14 +12,18 @@ import Database.Persist.Postgresql ((=.), update, toSqlKey, get, fromSqlKey, Ent
 import Import
 import Models
 import Network.Wai
+import Network.HTTP.Types (status200)
 import Servant
 import Servant.Auth.Server (FromJWT, ToJWT, JWT, throwAll, makeJWT, AuthResult(..), AuthResult, JWTSettings, CookieSettings, Auth)
 import Data.Password (PasswordCheck(..))
-import RIO.ByteString.Lazy (toStrict)
+import RIO.ByteString.Lazy (fromStrict, toStrict)
+import RIO.Text as T (pack)
 import Data.Aeson.Types
-import RIO.Time (getCurrentTime, UTCTime)
+import RIO.Time (fromGregorian, getCurrentTime, UTCTime(..))
 import Data.Password (Password)
 import Data.Password.Instances()
+import Servant.Docs
+import Servant.Auth.Docs()
 
 -- | "Resource" types
 
@@ -33,6 +37,16 @@ data NewUserAccount = NewUserAccount
     } deriving (Show, Generic)
 
 instance FromJSON NewUserAccount
+instance ToJSON NewUserAccount where
+  toJSON NewUserAccount{..} = object
+    [
+      "name" .= name
+    , "email" .= email
+    , "gender" .= gender
+    , "birthday" .= birthday
+    , "birthplace" .= birthplace
+    , "password" .= ("somePassword"::Text)
+    ]
 
 data UpdateUserAccount = UpdateUserAccount
   {
@@ -43,8 +57,14 @@ data UpdateUserAccount = UpdateUserAccount
   , updateBirthplace :: Maybe Text
   } deriving (Show, Generic)
 
+dropUpdatePrefix :: String -> String
+dropUpdatePrefix = drop (length ("update_"::String)) . camelTo2 '_'
+
 instance FromJSON UpdateUserAccount where
-  parseJSON = genericParseJSON defaultOptions{fieldLabelModifier = drop (length ("update_"::String)) . camelTo2 '_'}
+  parseJSON = genericParseJSON defaultOptions{fieldLabelModifier = dropUpdatePrefix}
+
+instance ToJSON UpdateUserAccount where
+  toJSON = genericToJSON defaultOptions{fieldLabelModifier = dropUpdatePrefix}
 
 data UpdatePassword = UpdatePassword
   {
@@ -53,10 +73,21 @@ data UpdatePassword = UpdatePassword
   } deriving (Show, Generic)
 
 instance FromJSON UpdatePassword
+instance ToJSON UpdatePassword where
+  toJSON _ = object
+    [ "currentPassword" .= ("sample"::Text)
+    , "newPassword" .=  ("anotherPassword"::Text)
+    ]
+
+newtype UserId = UserId {userId :: Int64}
+  deriving (Eq, Show, Read, Generic)
+
+instance FromJSON UserId
+instance ToJSON UserId
 
 data AuthenticatedUser = AuthenticatedUser 
   { 
-    auId    :: Int64
+    auId    :: UserId
   --, auEmail :: Text 
   } deriving (Eq, Show, Read, Generic)
 
@@ -75,6 +106,13 @@ data Login = Login
 instance FromJSON Login where
   -- drop the "login_" prefix, so we just need to say `email` and `password`
   parseJSON = genericParseJSON defaultOptions{fieldLabelModifier = drop (length ("login_"::String)) . camelTo2 '_'}
+
+instance ToJSON Login where
+  toJSON Login{..} = object
+    [
+      "email" .= loginEmail
+    , "password" .= ("somePassword"::Text)
+    ]
 
 data UserSession = UserSession
   {
@@ -95,13 +133,47 @@ type Protected =
     :<|> "api" :> "user" :> "password" :> ReqBody '[JSON] UpdatePassword :> Verb 'PUT 204 '[JSON] NoContent
 
 type Unprotected = 
-  "api" :> "hello" :> Get '[JSON] [Int]
-    :<|> "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
+    "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
     :<|> "api" :> "login" :> ReqBody '[JSON] Login :> PostCreated '[JSON] UserSession
 
-type Api auths = (Auth auths AuthenticatedUser :> Protected) :<|> Unprotected
+type Api auths = (Auth auths AuthenticatedUser :> Protected) :<|> Unprotected :<|> Raw
 
 type AppM = ReaderT App Servant.Handler
+
+-- | Documentation instances
+
+-- NOTE: DB models have their instances defined in Models.hs
+instance ToSample NewUserAccount where
+  toSamples _ = singleSample $
+    NewUserAccount  "Paco Alpaco"
+      "paco@alpaca.net"
+      Male
+      (Just (UTCTime (fromGregorian 2017 2 14) 0))
+      (Just "Shenzhen, China")
+      "secureAlpacaPassword"
+
+instance ToSample UpdateUserAccount where
+  toSamples _ = singleSample $
+    UpdateUserAccount (Just "New Alpaca Name")
+      (Just "new.email@alpaca.net")
+      (Just NonBinary)
+      Nothing
+      Nothing
+
+instance ToSample UpdatePassword where
+  toSamples _ = singleSample $
+    UpdatePassword "newPassword" "newPassword"
+
+instance ToSample Login where
+  toSamples _ = singleSample $
+    Login "charlie@alpaca.net" "password"
+
+instance ToSample UserSession where
+  toSamples _ = singleSample $
+    UserSession "some-long-token" sampleUser
+
+instance ToSample AuthenticatedUser where
+  toSamples _ = singleSample $ AuthenticatedUser $ UserId 42
 
 -- | Handlers
 
@@ -110,20 +182,20 @@ protected (Authenticated authUser) = (currentUser authUser) :<|> (updateUser aut
 protected _ = throwAll err401
 
 unprotected :: CookieSettings -> JWTSettings -> ServerT Unprotected AppM
-unprotected cs jwts = hello :<|> createUser cs jwts :<|> login cs jwts
+unprotected cs jwts = createUser cs jwts :<|> login cs jwts
 
 -- Protected handlers
 
 currentUser :: AuthenticatedUser -> AppM UserAccount
 currentUser AuthenticatedUser{..} = do
-  maybeUser <- runDB $ get $ toSqlKey auId
+  maybeUser <- runDB $ get $ toSqlKey $ userId auId
   case maybeUser of
     Nothing -> throwError $ err404 {errBody = "User not found."}
     Just user -> return user
 
 updateUser :: AuthenticatedUser -> UpdateUserAccount -> AppM NoContent
 updateUser (AuthenticatedUser auId) UpdateUserAccount {..} = do
-  maybeUser <- (runDB $ get $ ((toSqlKey auId) :: Key UserAccount))
+  maybeUser <- (runDB $ get $ ((toSqlKey (userId auId)) :: Key UserAccount))
   now <- getCurrentTime
   case maybeUser of
     Nothing -> throwError $ err404 { errBody = "User not found." }
@@ -135,12 +207,12 @@ updateUser (AuthenticatedUser auId) UpdateUserAccount {..} = do
                   , maybe Nothing (Just . (\x -> UserAccountBirthplace =. Just x)) updateBirthplace
                   , Just $ UserAccountUpdatedAt =. Just now]
         in
-          runDB $ update (toSqlKey auId) updates
+          runDB $ update (toSqlKey $ userId auId) updates
       return NoContent
 
 updatePassword :: AuthenticatedUser -> UpdatePassword -> AppM NoContent
 updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
-  maybeUser <- (runDB $ get $ ((toSqlKey auId) :: Key UserAccount))
+  maybeUser <- (runDB $ get $ ((toSqlKey (userId auId)) :: Key UserAccount))
   now <- getCurrentTime
   case maybeUser of
     Nothing -> throwError $ err404 {errBody = "User not found." }
@@ -149,15 +221,10 @@ updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
         PasswordCheckFail -> throwError $ err403 {errBody = "Unable to update password" }
         PasswordCheckSuccess -> do
           pwHash <- hashPassword newPassword
-          runDB $ update (toSqlKey auId) [UserAccountPassword =. pwHash, UserAccountUpdatedAt =. Just now]
+          runDB $ update (toSqlKey (userId auId)) [UserAccountPassword =. pwHash, UserAccountUpdatedAt =. Just now]
           return NoContent
 
 -- Unprotected handlers
-
-hello :: AppM [Int]
-hello = do
-  logInfo "Running hello"
-  return [42]
 
 createUser :: CookieSettings -> JWTSettings -> NewUserAccount -> AppM UserSession
 createUser _ jwts NewUserAccount {..} = do
@@ -181,20 +248,31 @@ login _ jwts Login{..} = do
 -- | Handler helpers:
 
 sessionWithUser :: JWTSettings -> (Key UserAccount) -> AppM UserSession
-sessionWithUser jwts userId = do
-  maybeUser <- runDB $ get userId
+sessionWithUser jwts sessionUserId = do
+  maybeUser <- runDB $ get sessionUserId
   case maybeUser of
     Nothing -> throwError $ err404 {errBody = "User not found."}
     Just user -> do
-      token <- liftIO $ makeJWT (AuthenticatedUser (fromSqlKey userId)) jwts Nothing
+      token <- liftIO $ makeJWT (AuthenticatedUser (UserId $ fromSqlKey $ sessionUserId)) jwts Nothing
       case token of
         Left _ -> throwError $ err500 {errBody = "Unable to generate session token."}
         Right t -> return $ UserSession (decodeUtf8Lenient $ toStrict t) user
 
 -- | Server construction
 
+docsH :: Tagged AppM (p -> (Network.Wai.Response -> t) -> t)
+docsH = return serveDocs where
+  serveDocs _ respond =
+    respond $ responseLBS status200 [plain] (fromStrict docsBs)
+  plain = ("Content-Type", "text/plain")
+  docsBs = encodeUtf8
+         . T.pack
+         . markdown
+         $ docsWithIntros [intro] proxyApi
+  intro = DocIntro "Undercurrent API" ["Uses JWT for auth."]
+
 apiServer :: CookieSettings -> JWTSettings -> ServerT (Api auths) AppM
-apiServer cs jwts = protected :<|> unprotected cs jwts
+apiServer cs jwts = protected :<|> unprotected cs jwts :<|> docsH
 
 proxyApi :: Proxy (Api '[JWT])
 proxyApi = Proxy

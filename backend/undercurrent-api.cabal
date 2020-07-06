@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 25454b1e7cead9182d24ce9d35272c65b74a48dbc0bb01013d2453be1aa5d662
+-- hash: 7b8d562c3cafb73797ca5bff7edcc9d1a783581abc4fc2574d791880683cb434
 
 name:           undercurrent-api
 version:        0.1.0.0
@@ -42,6 +42,7 @@ library
       aeson
     , base >=4.11 && <10
     , envy
+    , http-types
     , monad-logger
     , password
     , password-instances
@@ -51,7 +52,9 @@ library
     , rio >=0.1.12.0
     , servant
     , servant-auth
+    , servant-auth-docs
     , servant-auth-server
+    , servant-docs
     , servant-server
     , text
     , wai
@@ -69,6 +72,7 @@ executable undercurrent-api-exe
       aeson
     , base >=4.11 && <10
     , envy
+    , http-types
     , monad-logger
     , optparse-simple
     , password
@@ -79,7 +83,9 @@ executable undercurrent-api-exe
     , rio >=0.1.12.0
     , servant
     , servant-auth
+    , servant-auth-docs
     , servant-auth-server
+    , servant-docs
     , servant-server
     , text
     , undercurrent-api
@@ -102,6 +108,7 @@ test-suite undercurrent-api-test
     , envy
     , hspec
     , hspec-wai
+    , http-types
     , monad-logger
     , password
     , password-instances
@@ -111,8 +118,10 @@ test-suite undercurrent-api-test
     , rio >=0.1.12.0
     , servant
     , servant-auth
+    , servant-auth-docs
     , servant-auth-server
     , servant-client
+    , servant-docs
     , servant-quickcheck
     , servant-server
     , text
