@@ -18,7 +18,7 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import           RIO.Time                       ( UTCTime )
-import           Database.Persist.Postgresql    ( runSqlPool
+import           Database.Persist.Postgresql    (SqlPersistT, rawExecute,  runSqlPool
                                                 , runMigration
                                                 , SqlBackend
                                                 )
@@ -90,3 +90,8 @@ sampleUser =
 
 instance ToSample UserAccount where
   toSamples _ = singleSample sampleUser
+
+-- | Concessions to testing
+
+dropModels :: (MonadIO m) => SqlPersistT m ()
+dropModels = rawExecute "DROP TABLE IF EXISTS user_account" []

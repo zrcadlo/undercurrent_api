@@ -136,7 +136,10 @@ type Unprotected =
     "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
     :<|> "api" :> "login" :> ReqBody '[JSON] Login :> PostCreated '[JSON] UserSession
 
-type Api auths = (Auth auths AuthenticatedUser :> Protected) :<|> Unprotected :<|> Raw
+type Static =
+  "docs" :> Raw
+
+type Api auths = (Auth auths AuthenticatedUser :> Protected) :<|> Unprotected :<|> Static
 
 type AppM = ReaderT App Servant.Handler
 

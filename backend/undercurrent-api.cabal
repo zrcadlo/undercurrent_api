@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7b8d562c3cafb73797ca5bff7edcc9d1a783581abc4fc2574d791880683cb434
+-- hash: aa10789e1c4e9637604e1057ce8c859fd241fcb7eff8ac7c7624a48da50ebb54
 
 name:           undercurrent-api
 version:        0.1.0.0
@@ -97,6 +97,7 @@ test-suite undercurrent-api-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      ServerSpec
       UtilSpec
       Paths_undercurrent_api
   hs-source-dirs:
@@ -108,6 +109,7 @@ test-suite undercurrent-api-test
     , envy
     , hspec
     , hspec-wai
+    , hspec-wai-json
     , http-types
     , monad-logger
     , password
@@ -122,7 +124,6 @@ test-suite undercurrent-api-test
     , servant-auth-server
     , servant-client
     , servant-docs
-    , servant-quickcheck
     , servant-server
     , text
     , undercurrent-api
