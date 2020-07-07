@@ -9,7 +9,7 @@ import Test.Hspec
 import Test.Hspec.Wai
 import Test.Hspec.Wai.JSON
 import Network.Wai (Application)
-import Servant.Auth.Server (makeJWT, JWTSettings, JWT, defaultJWTSettings, defaultCookieSettings, generateKey)
+import Servant.Auth.Server (makeJWT, JWTSettings, defaultJWTSettings, defaultCookieSettings, generateKey)
 import Server (AuthenticatedUser(..), UserId(..), app)
 import Run (makeDBConnectionPool)
 import Models (UserAccount(..), migrateAll, dropModels)
@@ -102,7 +102,7 @@ spec =
                 get "/api/user" `shouldRespondWith` 401
 
             it "responds with the user for a known user" $ do
-                authenticatedGet "/api/user" (makeToken (AuthenticatedUser $ UserId testUserId)) ""
+                authenticatedGet "/api/user" currentUserToken ""
                     `shouldRespondWith` 
                     [json|{
                         email: "nena@alpaca.net",
@@ -112,9 +112,56 @@ spec =
                         birthplace: "Tokyo, Japan"
                     }|] {matchStatus = 200}
 
+        describe "PUT /api/user" $ do
+            it "responds successfully when updating email and name" $ do
+                authenticatedPut "/api/user" currentUserToken
+                    [json|{name: "Another Nena", birthplace: "Shenzhen, China"}|]
+                    `shouldRespondWith` 204
+
+        describe "PUT /api/user/password" $ do
+            it "responds with 403 if given the wrong password" $ do
+                authenticatedPut "/api/user/password" currentUserToken
+                    [json|{currentPassword: "notTheRightOne", newPassword: "aNewOne"}|]
+                    `shouldRespondWith` 403
+            
+            it "responds with 204 if given the right password" $ do
+                authenticatedPut "/api/user/password" currentUserToken
+                    [json|{currentPassword: "secureAlpacaPassword", newPassword: "aNewPassword"}|]
+                    `shouldRespondWith` 204
+
+        describe "POST /api/users" $ do
+            it "responds with 400 if required data is missing" $ do
+                postJSON "/api/users" [json|{name: "Luis"}|]
+                    `shouldRespondWith` 400
+
+            it "responds with 409 if trying to create a user with an existing email" $ do
+                postJSON "/api/users" 
+                    [json|{
+                        "email":"nena@alpaca.net",
+                        "birthday":"2017-02-14T00:00:00Z",
+                        "gender":"Male",
+                        "name":"Paco Alpaco",
+                        "password":"somePassword",
+                        "birthplace":"Shenzhen, China"
+                    }|]
+                    `shouldRespondWith` 409
+            
+            it "responds with 201 when creating a new user" $ do
+                postJSON "/api/users" 
+                    [json|{
+                        "email":"paco@alpaca.net",
+                        "birthday":"2017-02-14T00:00:00Z",
+                        "gender":"Male",
+                        "name":"Paco Alpaco",
+                        "password":"somePassword",
+                        "birthplace":"Shenzhen, China"
+                    }|]
+                    `shouldRespondWith` 201
+
         where
             makeToken :: AuthenticatedUser -> ByteString
             makeToken u = toStrict $ fromRight "bad-token" $ unsafePerformIO $ (makeJWT u jwtCfg Nothing)
+            currentUserToken = makeToken $ AuthenticatedUser $ UserId testUserId
             postJSON p = request methodPost p [("Content-Type", "application/json")]
             authenticatedRequest verb p token = request verb p [("Content-Type", "application/json"), ("Authorization", "Bearer " <> token)]
             authenticatedGet = authenticatedRequest methodGet

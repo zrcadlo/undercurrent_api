@@ -235,7 +235,7 @@ createUser _ jwts NewUserAccount {..} = do
   now <- getCurrentTime
   maybeNewUserId <- runDB $ insertUnique $ UserAccount email hashedPw name gender birthday birthplace (Just now) (Just now)
   case maybeNewUserId of
-    Nothing -> throwError $ err400 {errBody = "Unable to create user: duplicate email."}
+    Nothing -> throwError $ err409 {errBody = "Unable to create user: duplicate email."}
     Just newUserId -> sessionWithUser jwts newUserId
 
 login :: CookieSettings -> JWTSettings -> Login -> AppM UserSession
