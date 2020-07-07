@@ -21,6 +21,7 @@ import Data.Password.Argon2 (hashPassword)
 import System.IO.Unsafe (unsafePerformIO)
 import Data.Either (fromRight)
 import RIO.ByteString.Lazy (toStrict)
+import RIO.Time (fromGregorian, UTCTime(..))
 
 testDB :: DatabaseUrl
 testDB = "postgresql://localhost/undercurrent_test?user=luis"
@@ -58,9 +59,22 @@ setupData = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
     
     -- insert some "givens"
     hashedPw <- hashPassword "secureAlpacaPassword"
-    _ <- insert $ UserAccount "nena@alpaca.net" hashedPw "Nena Alpaca" Female Nothing Nothing Nothing Nothing
+    _ <- insert $
+         UserAccount "nena@alpaca.net"
+            hashedPw
+            "Nena Alpaca"
+            Female
+            (Just (UTCTime (fromGregorian 2017 2 14) 0))
+            (Just "Tokyo, Japan") 
+            (Just (UTCTime (fromGregorian 2017 2 14) 0)) 
+            (Just (UTCTime (fromGregorian 2017 2 14) 0))
+
     return ()
 
+-- this is horrible, I'm sorry Hubert:
+-- in `dropModels`, we explicitly reset the sequence so the first user (Nena) is always #1
+testUserId :: Int64
+testUserId = 1
 
 spec :: Spec
 spec = 
@@ -88,8 +102,15 @@ spec =
                 get "/api/user" `shouldRespondWith` 401
 
             it "responds with the user for a known user" $ do
-                authenticatedGet "/api/user" (makeToken (AuthenticatedUser $ UserId 1)) ""
-                    `shouldRespondWith` 200
+                authenticatedGet "/api/user" (makeToken (AuthenticatedUser $ UserId testUserId)) ""
+                    `shouldRespondWith` 
+                    [json|{
+                        email: "nena@alpaca.net",
+                        name: "Nena Alpaca",
+                        gender: "Female",
+                        birthday: "2017-02-14T00:00:00Z",
+                        birthplace: "Tokyo, Japan"
+                    }|] {matchStatus = 200}
 
         where
             makeToken :: AuthenticatedUser -> ByteString
