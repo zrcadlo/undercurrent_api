@@ -9,27 +9,33 @@ import Test.Hspec
 import Test.Hspec.Wai
 import Test.Hspec.Wai.JSON
 import Network.Wai (Application)
-import Servant.Auth.Server (defaultJWTSettings, defaultCookieSettings, generateKey)
-import Server (app)
+import Servant.Auth.Server (makeJWT, JWTSettings, JWT, defaultJWTSettings, defaultCookieSettings, generateKey)
+import Server (AuthenticatedUser(..), UserId(..), app)
 import Run (makeDBConnectionPool)
 import Models (UserAccount(..), migrateAll, dropModels)
 import Database.Persist.Postgresql (ConnectionString, runMigration, insert, withPostgresqlConn, runSqlConn)
 import Servant.Server (Context(..))
-import Network.HTTP.Types (methodPost)
+import Network.HTTP.Types (methodGet, methodPut, methodPost)
 import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
 import Data.Password.Argon2 (hashPassword)
+import System.IO.Unsafe (unsafePerformIO)
+import Data.Either (fromRight)
+import RIO.ByteString.Lazy (toStrict)
 
 testDB :: DatabaseUrl
 testDB = "postgresql://localhost/undercurrent_test?user=luis"
 noOpLog :: LogFunc
 noOpLog = mkLogFunc $ (\_ _ _ _ -> pure ())
+--testKey :: JWK
+testKey = unsafePerformIO $ generateKey
+jwtCfg :: JWTSettings
+jwtCfg =  defaultJWTSettings testKey
+
 
 testApp ::  IO Application
 testApp = do
-    jwtKey <- generateKey
     pool <- makeDBConnectionPool testDB
     let 
-        jwtCfg = defaultJWTSettings jwtKey
         cookieCfg = defaultCookieSettings 
         cfg = cookieCfg :. jwtCfg :. EmptyContext
         ctx = App
@@ -40,9 +46,6 @@ testApp = do
             }
         in 
             return $ app cfg cookieCfg jwtCfg ctx
-
---postJSON :: ByteString -> ByteString -> WaiSession st SResponse
-postJSON p = request methodPost p [("Content-Type", "application/json")]
 
 testDBBS :: ConnectionString
 testDBBS = "postgresql://localhost/undercurrent_test?user=luis"
@@ -57,6 +60,7 @@ setupData = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
     hashedPw <- hashPassword "secureAlpacaPassword"
     _ <- insert $ UserAccount "nena@alpaca.net" hashedPw "Nena Alpaca" Female Nothing Nothing Nothing Nothing
     return ()
+
 
 spec :: Spec
 spec = 
@@ -78,3 +82,21 @@ spec =
             it "responds with 201 for a known user" $ do
                 postJSON "/api/login" [json|{email: "nena@alpaca.net", password: "secureAlpacaPassword"}|]
                     `shouldRespondWith` 201
+
+        describe "GET /api/user" $ do
+            it "responds with 401 for an unknown user" $ do
+                get "/api/user" `shouldRespondWith` 401
+
+            it "responds with the user for a known user" $ do
+                authenticatedGet "/api/user" (makeToken (AuthenticatedUser $ UserId 1)) ""
+                    `shouldRespondWith` 200
+
+        where
+            makeToken :: AuthenticatedUser -> ByteString
+            makeToken u = toStrict $ fromRight "bad-token" $ unsafePerformIO $ (makeJWT u jwtCfg Nothing)
+            postJSON p = request methodPost p [("Content-Type", "application/json")]
+            authenticatedRequest verb p token = request verb p [("Content-Type", "application/json"), ("Authorization", "Bearer " <> token)]
+            authenticatedGet = authenticatedRequest methodGet
+            authenticatedPost = authenticatedRequest methodPost
+            authenticatedPut  = authenticatedRequest methodPut
+
