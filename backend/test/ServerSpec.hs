@@ -41,25 +41,27 @@ testApp = do
         in 
             return $ app cfg cookieCfg jwtCfg ctx
 
+--postJSON :: ByteString -> ByteString -> WaiSession st SResponse
 postJSON p = request methodPost p [("Content-Type", "application/json")]
 
 testDBBS :: ConnectionString
 testDBBS = "postgresql://localhost/undercurrent_test?user=luis"
 
-clearDB :: IO ()
-clearDB = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
-    _ <- runMigration migrateAll
-    dropModels
-
 setupData :: IO ()
 setupData = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
+    -- run any missing schema migrations
+    _ <- runMigration migrateAll
+    dropModels
+    
+    -- insert some "givens"
     hashedPw <- hashPassword "secureAlpacaPassword"
     _ <- insert $ UserAccount "nena@alpaca.net" hashedPw "Nena Alpaca" Female Nothing Nothing Nothing Nothing
     return ()
 
 spec :: Spec
 spec = 
-    beforeAll_ (clearDB >> setupData) $ with testApp $ do
+    -- before the entire test suite, migrate the schema, drop any existing data, and populate with "seed" data
+    beforeAll_ setupData $ with testApp $ do
         describe "GET /docs" $ do
             it "returns a plain text file with docs" $ do
                 get "/docs" `shouldRespondWith` 200
