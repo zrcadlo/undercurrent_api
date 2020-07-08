@@ -272,7 +272,9 @@ docsH = return serveDocs where
          . T.pack
          . markdown
          $ docsWithIntros [intro] proxyApi
-  intro = DocIntro "Undercurrent API" ["Uses JWT for auth."]
+  intro = DocIntro "Undercurrent API" ["For an up-to-date version of this documentation, visit the `/docs` endpoint of the API.\
+                                       \For all `JWT` protected endpoints, you must provide it in the `Authorization` header, with a value of `Bearer THE_TOKEN`\
+                                       \(where `THE_TOKEN` is what's returned in the `token` property after logging in or creating a user.)"]
 
 apiServer :: CookieSettings -> JWTSettings -> ServerT (Api auths) AppM
 apiServer cs jwts = protected :<|> unprotected cs jwts :<|> docsH
