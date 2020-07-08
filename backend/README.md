@@ -231,3 +231,5 @@ https://github.com/haskell-servant/example-servant-persistent
   - Maybe for the more complex bits of querying, we'll probably need Esqueleto: https://github.com/bitemyapp/esqueleto
 * CORS:
   - We'll probably need CORS support, I already figured this out elsewhere, it seems: https://github.com/lfborjas/senex/blob/96ca09b7b559e7d668c407c9c09788c92edeb756/src/API.hs#L127
+* Deployment:
+  - Apart from the aforementioned Docker stuffs, this is some good general advice: https://www.yesodweb.com/book/deploying-your-webapp
