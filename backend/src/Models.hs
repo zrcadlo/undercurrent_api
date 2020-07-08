@@ -18,7 +18,7 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import           RIO.Time                       ( UTCTime )
-import           Database.Persist.Postgresql    ( runSqlPool
+import           Database.Persist.Postgresql    (SqlPersistT, rawExecute,  runSqlPool
                                                 , runMigration
                                                 , SqlBackend
                                                 )
@@ -33,6 +33,8 @@ import           Data.Aeson                     ((.=)
                                                 , object
                                                 , ToJSON(..)
                                                 )
+import Servant.Docs
+
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
     UserAccount
@@ -72,3 +74,24 @@ runDB
 runDB query = do
     pool <- view dbConnectionPoolL
     liftIO $ runSqlPool query pool
+
+-- | Documentation helpers
+
+sampleUser :: UserAccount
+sampleUser = 
+    UserAccount "nena@alpaca.com" 
+      (PasswordHash "secureAlpacaPassword")
+      "Nena Alpaca"
+      Female
+      Nothing
+      (Just "Tokyo, Japan")
+      Nothing
+      Nothing
+
+instance ToSample UserAccount where
+  toSamples _ = singleSample sampleUser
+
+-- | Concessions to testing
+
+dropModels :: (MonadIO m) => SqlPersistT m ()
+dropModels = rawExecute "TRUNCATE TABLE user_account RESTART IDENTITY" []

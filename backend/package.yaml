@@ -26,6 +26,8 @@ dependencies:
 - servant-server
 - servant-auth
 - servant-auth-server
+- servant-docs
+- servant-auth-docs
 - aeson
 - text
 - wai
@@ -37,6 +39,7 @@ dependencies:
 - monad-logger
 - password
 - password-instances
+- http-types
 
 # TODO: look into dotenv (https://github.com/stackbuilders/dotenv-hs) and servant-swagger/servant-auth-swagger
 
@@ -74,7 +77,7 @@ tests:
     - hspec
     - servant-client
     - hspec-wai
-    - servant-quickcheck
+    - hspec-wai-json
 
     ghc-options:
     - -threaded

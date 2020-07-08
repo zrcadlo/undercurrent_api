@@ -40,6 +40,11 @@ To generate `JWT.key` at the root of the directory, go to a repl (via `stack ghc
 
 `stack test`
 
+## Update docs:
+
+* Run the server
+* Request `/docs`: produces a plain text markdown file like e.g. https://gist.github.com/lfborjas/277ce4128e5eb5dfb7f060f220e35ae0
+
 ## Notes
 
 ### Manual testing/exec
@@ -204,3 +209,27 @@ https://github.com/haskell-servant/example-servant-persistent
 * https://github.com/cdepillabout/password/blob/86a678521140526f41dd751e92642742cb4cafd9/password/test/tasty/PBKDF2.hs
 * https://github.com/yesodweb/persistent/blob/master/docs/Persistent-entity-syntax.md
 * https://artyom.me/aeson#generics-handling-weird-field-names-in-data
+
+### Testing references:
+
+* https://github.com/hspec/hspec-wai#readme
+* https://hackage.haskell.org/package/hspec-wai-0.10.1/docs/Test-Hspec-Wai.html
+* https://hspec.github.io/writing-specs.html
+* Pay close attention to the "first alternative" here, https://docs.servant.dev/en/stable/cookbook/testing/Testing.html
+* Some intense testing, from which I took some inspiration: https://github.com/haskell-servant/servant-auth/blob/master/servant-auth-server/test/Servant/Auth/ServerSpec.hs
+
+### Misc future improvements
+
+* Introduce UUIDs for users, maybe use that for the tokens? https://bitemyapp.com/blog/uuids-with-persistent-yesod/ (and this: http://michaelxavier.net/posts/2015-04-14-Adding-a-UUID-Column-to-a-Persistent-Table.html, linked from the persistent docs, but uses lenses -- https://github.com/yesodweb/persistent/tree/master/docs)
+* Look into more nuanced tests, with proper checking of DB effects -- may need fancier things like: https://begriffs.com/posts/2014-10-19-warp-server-controller-test.html and https://stackoverflow.com/questions/47843958/multiple-before-functions-in-hspec
+* Do we need JSON responses for errors? If we do: https://stackoverflow.com/questions/41753516/custom-json-errors-for-servant-server
+
+## Next
+
+* Dreams:
+  - We'll need a DreamEmotions join table (see: https://www.yesodweb.com/book/persistent#persistent_relations)
+  - Maybe for the more complex bits of querying, we'll probably need Esqueleto: https://github.com/bitemyapp/esqueleto
+* CORS:
+  - We'll probably need CORS support, I already figured this out elsewhere, it seems: https://github.com/lfborjas/senex/blob/96ca09b7b559e7d668c407c9c09788c92edeb756/src/API.hs#L127
+* Deployment:
+  - Apart from the aforementioned Docker stuffs, this is some good general advice: https://www.yesodweb.com/book/deploying-your-webapp
