@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: aa10789e1c4e9637604e1057ce8c859fd241fcb7eff8ac7c7624a48da50ebb54
+-- hash: 79be5cf23152d041c27fa65373913ce3ab9c9b84616a558143ba1f2b8f372c2d
 
 name:           undercurrent-api
 version:        0.1.0.0
@@ -42,6 +42,7 @@ library
       aeson
     , base >=4.11 && <10
     , envy
+    , esqueleto
     , http-types
     , monad-logger
     , password
@@ -72,6 +73,7 @@ executable undercurrent-api-exe
       aeson
     , base >=4.11 && <10
     , envy
+    , esqueleto
     , http-types
     , monad-logger
     , optparse-simple
@@ -107,6 +109,7 @@ test-suite undercurrent-api-test
       aeson
     , base >=4.11 && <10
     , envy
+    , esqueleto
     , hspec
     , hspec-wai
     , hspec-wai-json
