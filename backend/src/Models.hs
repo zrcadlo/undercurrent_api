@@ -34,6 +34,7 @@ import           Data.Aeson                     ((.=)
                                                 , ToJSON(..)
                                                 )
 import Servant.Docs
+import Data.Aeson.Types
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
@@ -48,6 +49,32 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
         updatedAt UTCTime Maybe default=now()
         UniqueEmail email
         deriving Show
+
+    Dream
+        userId UserAccountId
+        title Text
+        description Text
+        isLucid Bool
+        isNightmare Bool
+        isRecurring Bool
+        isPrivate Bool
+        isStarred Bool
+        createdAt UTCTime default=now()
+        updatedAt UTCTime default=now()
+
+    Emotion
+        name EmotionLabel
+        createdAt UTCTime default=now()
+        updatedAt UTCTime default=now()
+        UniqueEmotionName name
+
+    DreamEmotion
+        dreamId DreamId
+        emotionId EmotionId
+        createdAt UTCTime default=now()
+        updatedAt UTCTime default=now()
+        UniqueDreamEmotion dreamId emotionId
+
 |]
 
 -- manually rolling out the JSON instance for UserAccount to avoid exposing the password.
@@ -63,6 +90,9 @@ instance ToJSON UserAccount where
         , "birthday" .= userAccountBirthday e
         , "birthplace" .= userAccountBirthplace e
         ]
+
+dropPrefix :: String -> String -> String
+dropPrefix p = drop (length $ p <> "_") . camelTo2 '_'
 
 runMigrations :: ReaderT SqlBackend IO ()
 runMigrations = runMigration migrateAll

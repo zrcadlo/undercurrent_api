@@ -96,6 +96,19 @@ instance ToJWT  AuthenticatedUser
 instance FromJSON AuthenticatedUser
 instance FromJWT AuthenticatedUser
 
+data NewDream = NewDream
+  {
+    title :: Text
+  , date  :: UTCTime
+  , description :: Text
+  , emotions :: [EmotionLabel]
+  , lucid :: Bool
+  , nightmare :: Bool
+  , recurring :: Bool
+  , private :: Bool
+  , starred :: Bool
+  } deriving (Eq, Show, Generic)
+
 data Login = Login
   {
     loginEmail :: Text

@@ -1,16 +1,18 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
-{-# LANGUAGE DeriveGeneric     #-}
 module Types where
 
 import           GHC.Generics
 import           RIO
 import           System.Envy
 import Database.Persist.TH (derivePersistField)
-import Data.Aeson.Types (ToJSON, FromJSON)
-import Database.Persist.Postgresql (ConnectionPool)
+import Data.Aeson.Types
+import Database.Persist.Postgresql (PersistFieldSql, ConnectionPool)
+import Database.Persist (PersistField)
+import RIO.Text (unpack)
 
 type Port = Int
 
@@ -71,3 +73,22 @@ data Gender = Female | Male | NonBinary
 derivePersistField "Gender"
 instance ToJSON Gender
 instance FromJSON Gender
+
+emotionLabels :: [Text]
+emotionLabels = ["joy", "trust", "anticipation", "surprise", "disgust", "sadness", "fear", "anger", "acceptance", "admiration", "affection", "annoyance", "alienation", "amazement", "anxiety", "apathy", "awe", "betrayal", "bitter", "bold", "boredom", "bravery", "brooding", "calm", "cautious", "cheerful", "comfortable", "confused", "cranky", "crushed", "curious", "denial", "despair", "disappointed", "distress", "drained", "eager", "embarassed", "empty", "energized", "envy", "excited", "foreboding", "fulfilled", "grateful", "guilt", "hatred", "shame", "helpless", "hollow", "hopeful", "humiliated", "hurt", "inspired", "intimidated", "irritated", "jealous", "lazy", "lonely", "longing", "love", "lust", "mellow", "nervous", "numb", "panic", "paranoia", "peaceful", "pity", "powerful", "powerless", "protective", "proud", "reluctance", "remorse", "resentment", "self-conscious", "sensitive", "shock", "sick", "shy", "stressed", "tired", "alert", "vigilant", "weary", "worry"]
+
+newtype EmotionLabel = EmotionLabel Text
+  deriving (Show, Eq, Generic, PersistField, PersistFieldSql)
+instance ToJSON EmotionLabel
+instance FromJSON EmotionLabel where
+  parseJSON = withText "EmotionLabel" $ \text ->
+    case (mkEmotionLabel text) of
+      Just el -> pure el
+      Nothing -> fail $ unpack $ text <> " isn't a known emotion."
+
+mkEmotionLabel :: Text -> Maybe EmotionLabel
+mkEmotionLabel s = 
+  if s `elem` emotionLabels then
+    Just $ EmotionLabel s
+  else
+    Nothing
