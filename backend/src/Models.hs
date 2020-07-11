@@ -18,7 +18,7 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import           RIO.Time                       ( UTCTime )
-import           Database.Persist.Postgresql    (SqlPersistT, rawExecute,  runSqlPool
+import           Database.Persist.Postgresql    (Key, upsert, Entity(..), SqlPersistT, rawExecute,  runSqlPool
                                                 , runMigration
                                                 , SqlBackend
                                                 )
@@ -98,6 +98,14 @@ runDB
 runDB query = do
     pool <- view dbConnectionPoolL
     liftIO $ runSqlPool query pool
+
+-- | Queries
+
+upsertEmotions :: (MonadIO m, HasDBConnectionPool s, MonadReader s m) => [Emotion] -> m [Key Emotion]
+upsertEmotions emotions =
+  forM emotions $ \emotion -> do
+    Entity id_ _ <- runDB $ upsert emotion []
+    return id_
 
 -- | Documentation helpers
 

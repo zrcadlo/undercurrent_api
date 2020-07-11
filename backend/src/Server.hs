@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -8,7 +9,7 @@
 module Server where
 
 import Data.Password.Argon2 (hashPassword, checkPassword)
-import Database.Persist.Postgresql ((=.), update, toSqlKey, get, fromSqlKey, Entity (..), getBy, insertUnique)
+import Database.Persist.Postgresql (insertMany_, insert, (=.), update, toSqlKey, get, fromSqlKey, Entity (..), getBy, insertUnique)
 import Import
 import Models
 import Network.Wai
@@ -25,6 +26,7 @@ import Data.Password.Instances()
 import Servant.Docs
 import Servant.Auth.Docs()
 import Util
+import RIO.Partial (fromJust)
 
 -- | "Resource" types
 
@@ -118,7 +120,6 @@ instance FromJWT AuthenticatedUser
 instance ToSample AuthenticatedUser where
   toSamples _ = singleSample $ AuthenticatedUser $ UserId 42
 
-
 data DreamWithEmotions = DreamWithEmotions
   {
     title :: Text
@@ -135,45 +136,52 @@ data DreamWithEmotions = DreamWithEmotions
 instance FromJSON DreamWithEmotions
 instance ToJSON DreamWithEmotions
 
-dreamWithEmotions :: Dream -> [Emotion] -> DreamWithEmotions
-dreamWithEmotions Dream{..} es =
-  DreamWithEmotions
-    {
-      title = dreamTitle
-    , date  = dreamDreamedAt
-    , description = dreamDescription
-    , emotions = map emotionName es
-    , lucid = dreamIsLucid
-    , nightmare = dreamIsNightmare
-    , recurring = dreamIsRecurring
-    , private = dreamIsPrivate
-    , starred = dreamIsStarred
-    } 
-
--- TODO: triggers
--- https://stackoverflow.com/questions/35231697/how-to-let-default-values-come-from-the-database
-
-zeroTime :: UTCTime
-zeroTime = UTCTime (fromGregorian 2020 7 7) 0
-
-dreamSansEmotions :: UserId -> DreamWithEmotions -> (Dream, [Emotion])
-dreamSansEmotions UserId{..} DreamWithEmotions{..} =
-  (dream, dbEmotions)
-  where
-    dream = 
-      Dream (toSqlKey userId)
-        title
-        description
-        lucid
-        nightmare
-        recurring
-        private
-        starred
-        date
+instance ToSample DreamWithEmotions where
+  toSamples _ = 
+    singleSample $ 
+      DreamWithEmotions "I dream of Alpacas"
         zeroTime
-        zeroTime
+        "Some alpacas were wearing sunglasses"
+        (map (fromJust . mkEmotionLabel) ["joy", "intimidated"])
+        False
+        False
+        True
+        False
+        True
 
-    dbEmotions = map (\e-> Emotion e zeroTime zeroTime) emotions
+data DreamUpdate = DreamUpdate
+  { 
+    updateTitle :: Maybe Text
+  , updateDate  :: Maybe UTCTime
+  , updateDescription :: Maybe Text
+  , updateEmotions :: Maybe [EmotionLabel]
+  , updateLucid :: Maybe Bool
+  , updateNightmare :: Maybe Bool
+  , updateRecurring :: Maybe Bool
+  , updatePrivate :: Maybe Bool
+  , updateStarred :: Maybe Bool
+  } deriving (Eq, Show, Generic)
+
+instance FromJSON DreamUpdate where
+  parseJSON = genericParseJSON defaultOptions{fieldLabelModifier = dropPrefix "update"}
+
+instance ToJSON DreamUpdate where
+  toJSON = genericToJSON defaultOptions{fieldLabelModifier = dropPrefix "update"}
+
+instance ToSample DreamUpdate where
+  toSamples _ = 
+    [("All fields are optional; if emotions are sent, they will replace current ones.", sampleDreamUpdate)]
+    where
+      sampleDreamUpdate = 
+        DreamUpdate (Just "I dreamed a dream")
+          Nothing
+          Nothing
+          (Just (map (fromJust . mkEmotionLabel) ["acceptance"]))
+          (Just True)
+          (Just False)
+          (Just False)
+          (Just True)
+          (Just False)
 
 
 data Login = Login
@@ -220,6 +228,8 @@ type Protected =
   "api" :> "user" :> Get '[JSON] UserAccount
     :<|> "api" :> "user" :> ReqBody '[JSON] UpdateUserAccount :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "password" :> ReqBody '[JSON] UpdatePassword :> Verb 'PUT 204 '[JSON] NoContent
+    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] DreamWithEmotions :> PostCreated '[JSON] DreamWithEmotions
+    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] DreamUpdate :> Verb 'PUT 204 '[JSON] NoContent
 
 type Unprotected = 
     "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
@@ -235,7 +245,7 @@ type AppM = ReaderT App Servant.Handler
 -- | Handlers
 
 protected :: AuthResult AuthenticatedUser -> ServerT Protected AppM
-protected (Authenticated authUser) = (currentUser authUser) :<|> (updateUser authUser) :<|> (updatePassword authUser)
+protected (Authenticated authUser) = (currentUser authUser) :<|> (updateUser authUser) :<|> (updatePassword authUser) :<|> (createDream authUser)
 protected _ = throwAll err401
 
 unprotected :: CookieSettings -> JWTSettings -> ServerT Unprotected AppM
@@ -281,6 +291,15 @@ updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
           runDB $ update (toSqlKey (userId auId)) [UserAccountPassword =. pwHash, UserAccountUpdatedAt =. Just now]
           return NoContent
 
+createDream :: AuthenticatedUser -> DreamWithEmotions -> AppM DreamWithEmotions
+createDream (AuthenticatedUser auId) dream = do
+  let (dbDream, dbEmotions) = dreamSansEmotions auId dream
+  dreamId <- runDB $ insert dbDream
+  emotionIds <- upsertEmotions dbEmotions
+  dreamEmotions <- mapM (\eid -> pure $ DreamEmotion dreamId eid zeroTime zeroTime) emotionIds
+  runDB $ insertMany_ dreamEmotions
+  return dream
+
 -- Unprotected handlers
 
 createUser :: CookieSettings -> JWTSettings -> NewUserAccount -> AppM UserSession
@@ -314,6 +333,40 @@ sessionWithUser jwts sessionUserId = do
       case token of
         Left _ -> throwError $ err500 {errBody = "Unable to generate session token."}
         Right t -> return $ UserSession (decodeUtf8Lenient $ toStrict t) user
+
+dreamWithEmotions :: Dream -> [Emotion] -> DreamWithEmotions
+dreamWithEmotions Dream{..} es =
+  DreamWithEmotions
+    {
+      title = dreamTitle
+    , date  = dreamDreamedAt
+    , description = dreamDescription
+    , emotions = map emotionName es
+    , lucid = dreamIsLucid
+    , nightmare = dreamIsNightmare
+    , recurring = dreamIsRecurring
+    , private = dreamIsPrivate
+    , starred = dreamIsStarred
+    } 
+
+dreamSansEmotions :: UserId -> DreamWithEmotions -> (Dream, [Emotion])
+dreamSansEmotions UserId{..} DreamWithEmotions{..} =
+  (dream, dbEmotions)
+  where
+    dream = 
+      Dream (toSqlKey userId)
+        title
+        description
+        lucid
+        nightmare
+        recurring
+        private
+        starred
+        date
+        zeroTime
+        zeroTime
+
+    dbEmotions = map (\e-> Emotion e zeroTime zeroTime) emotions
 
 -- | Server construction
 
