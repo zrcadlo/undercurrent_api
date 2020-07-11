@@ -449,12 +449,12 @@ updateDreamEmotions dreamKey DreamUpdate{..} =
       forM_ (oldEmotionIds \\ newEmotionIds) $ \discardedEmotion -> do
         runDB $ deleteBy $ UniqueDreamEmotion dreamKey discardedEmotion
       -- insert all new emotions
-      emotionsToInsert <- mapM (\eid -> pure $ DreamEmotion dreamKey eid zeroTime zeroTime) (newEmotionIds \\ oldEmotionIds)
+      emotionsToInsert <- 
+        forM (newEmotionIds \\ oldEmotionIds) $ \newEmotion -> 
+          pure $ DreamEmotion dreamKey newEmotion zeroTime zeroTime 
       runDB $ insertMany_ emotionsToInsert
       -- notice that the intersection of old and new emotions should be left untouched!
       pure ()
-
-
 
 -- | Server construction
 
