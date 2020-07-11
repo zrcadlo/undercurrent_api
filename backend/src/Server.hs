@@ -24,6 +24,9 @@ import Data.Password (Password)
 import Data.Password.Instances()
 import Servant.Docs
 import Servant.Auth.Docs()
+import Util
+
+-- | 
 
 -- | "Resource" types
 
@@ -57,14 +60,11 @@ data UpdateUserAccount = UpdateUserAccount
   , updateBirthplace :: Maybe Text
   } deriving (Show, Generic)
 
-dropUpdatePrefix :: String -> String
-dropUpdatePrefix = drop (length ("update_"::String)) . camelTo2 '_'
-
 instance FromJSON UpdateUserAccount where
-  parseJSON = genericParseJSON defaultOptions{fieldLabelModifier = dropUpdatePrefix}
+  parseJSON = genericParseJSON defaultOptions{fieldLabelModifier = dropPrefix "update"}
 
 instance ToJSON UpdateUserAccount where
-  toJSON = genericToJSON defaultOptions{fieldLabelModifier = dropUpdatePrefix}
+  toJSON = genericToJSON defaultOptions{fieldLabelModifier = dropPrefix "update"}
 
 data UpdatePassword = UpdatePassword
   {
@@ -96,7 +96,7 @@ instance ToJWT  AuthenticatedUser
 instance FromJSON AuthenticatedUser
 instance FromJWT AuthenticatedUser
 
-data NewDream = NewDream
+data DreamWithEmotions = DreamWithEmotions
   {
     title :: Text
   , date  :: UTCTime
@@ -109,6 +109,49 @@ data NewDream = NewDream
   , starred :: Bool
   } deriving (Eq, Show, Generic)
 
+instance FromJSON DreamWithEmotions
+instance ToJSON DreamWithEmotions
+
+dreamWithEmotions :: Dream -> [Emotion] -> DreamWithEmotions
+dreamWithEmotions Dream{..} es =
+  DreamWithEmotions
+    {
+      title = dreamTitle
+    , date  = dreamCreatedAt
+    , description = dreamDescription
+    , emotions = map emotionName es
+    , lucid = dreamIsLucid
+    , nightmare = dreamIsNightmare
+    , recurring = dreamIsRecurring
+    , private = dreamIsPrivate
+    , starred = dreamIsStarred
+    } 
+
+-- TODO: triggers
+-- https://stackoverflow.com/questions/35231697/how-to-let-default-values-come-from-the-database
+
+zeroTime :: UTCTime
+zeroTime = UTCTime (fromGregorian 2020 7 7) 0
+
+dreamSansEmotions :: UserId -> DreamWithEmotions -> (Dream, [Emotion])
+dreamSansEmotions UserId{..} DreamWithEmotions{..} =
+  (dream, dbEmotions)
+  where
+    dream = 
+      Dream (toSqlKey userId)
+        title
+        description
+        lucid
+        nightmare
+        recurring
+        private
+        starred
+        zeroTime
+        zeroTime
+
+    dbEmotions = map (\e-> Emotion e zeroTime zeroTime) emotions
+
+
 data Login = Login
   {
     loginEmail :: Text
@@ -118,7 +161,7 @@ data Login = Login
 -- customize JSON instances: https://artyom.me/aeson#generics-handling-weird-field-names-in-data
 instance FromJSON Login where
   -- drop the "login_" prefix, so we just need to say `email` and `password`
-  parseJSON = genericParseJSON defaultOptions{fieldLabelModifier = drop (length ("login_"::String)) . camelTo2 '_'}
+  parseJSON = genericParseJSON defaultOptions{fieldLabelModifier = dropPrefix "login"}
 
 instance ToJSON Login where
   toJSON Login{..} = object
@@ -135,7 +178,7 @@ data UserSession = UserSession
 
 instance ToJSON UserSession where
   -- drop the `session_` prefix, so we get `token` and `user`
-  toJSON = genericToJSON defaultOptions{fieldLabelModifier = drop (length ("session_"::String)) . camelTo2 '_'}
+  toJSON = genericToJSON defaultOptions{fieldLabelModifier = dropPrefix "session" }
 
 -- | API types
 -- inspired by: https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme

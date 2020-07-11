@@ -29,10 +29,6 @@ import           Data.Password.Argon2           ( Argon2
                                                 
                                                 
                                                 )
-import           Data.Aeson                     ((.=)
-                                                , object
-                                                , ToJSON(..)
-                                                )
 import Servant.Docs
 import Data.Aeson.Types
 
@@ -90,9 +86,6 @@ instance ToJSON UserAccount where
         , "birthday" .= userAccountBirthday e
         , "birthplace" .= userAccountBirthplace e
         ]
-
-dropPrefix :: String -> String -> String
-dropPrefix p = drop (length $ p <> "_") . camelTo2 '_'
 
 runMigrations :: ReaderT SqlBackend IO ()
 runMigrations = runMigration migrateAll
