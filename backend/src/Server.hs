@@ -26,8 +26,6 @@ import Servant.Docs
 import Servant.Auth.Docs()
 import Util
 
--- | 
-
 -- | "Resource" types
 
 data NewUserAccount = NewUserAccount
@@ -51,6 +49,15 @@ instance ToJSON NewUserAccount where
     , "password" .= ("somePassword"::Text)
     ]
 
+instance ToSample NewUserAccount where
+  toSamples _ = singleSample $
+    NewUserAccount  "Paco Alpaco"
+      "paco@alpaca.net"
+      Male
+      (Just (UTCTime (fromGregorian 2017 2 14) 0))
+      (Just "Shenzhen, China")
+      "secureAlpacaPassword"
+
 data UpdateUserAccount = UpdateUserAccount
   {
     updateName :: Maybe Text
@@ -66,6 +73,14 @@ instance FromJSON UpdateUserAccount where
 instance ToJSON UpdateUserAccount where
   toJSON = genericToJSON defaultOptions{fieldLabelModifier = dropPrefix "update"}
 
+instance ToSample UpdateUserAccount where
+  toSamples _ = singleSample $
+    UpdateUserAccount (Just "New Alpaca Name")
+      (Just "new.email@alpaca.net")
+      (Just NonBinary)
+      Nothing
+      Nothing
+
 data UpdatePassword = UpdatePassword
   {
     currentPassword :: Password
@@ -78,6 +93,10 @@ instance ToJSON UpdatePassword where
     [ "currentPassword" .= ("sample"::Text)
     , "newPassword" .=  ("anotherPassword"::Text)
     ]
+
+instance ToSample UpdatePassword where
+  toSamples _ = singleSample $
+    UpdatePassword "newPassword" "newPassword"
 
 newtype UserId = UserId {userId :: Int64}
   deriving (Eq, Show, Read, Generic)
@@ -95,6 +114,10 @@ instance ToJSON AuthenticatedUser
 instance ToJWT  AuthenticatedUser
 instance FromJSON AuthenticatedUser
 instance FromJWT AuthenticatedUser
+
+instance ToSample AuthenticatedUser where
+  toSamples _ = singleSample $ AuthenticatedUser $ UserId 42
+
 
 data DreamWithEmotions = DreamWithEmotions
   {
@@ -171,6 +194,10 @@ instance ToJSON Login where
     , "password" .= ("somePassword"::Text)
     ]
 
+instance ToSample Login where
+  toSamples _ = singleSample $
+    Login "charlie@alpaca.net" "password"
+
 data UserSession = UserSession
   {
     sessionToken :: Text
@@ -180,6 +207,11 @@ data UserSession = UserSession
 instance ToJSON UserSession where
   -- drop the `session_` prefix, so we get `token` and `user`
   toJSON = genericToJSON defaultOptions{fieldLabelModifier = dropPrefix "session" }
+
+
+instance ToSample UserSession where
+  toSamples _ = singleSample $
+    UserSession "some-long-token" sampleUser
 
 -- | API types
 -- inspired by: https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
@@ -199,41 +231,6 @@ type Static =
 type Api auths = (Auth auths AuthenticatedUser :> Protected) :<|> Unprotected :<|> Static
 
 type AppM = ReaderT App Servant.Handler
-
--- | Documentation instances
-
--- NOTE: DB models have their instances defined in Models.hs
-instance ToSample NewUserAccount where
-  toSamples _ = singleSample $
-    NewUserAccount  "Paco Alpaco"
-      "paco@alpaca.net"
-      Male
-      (Just (UTCTime (fromGregorian 2017 2 14) 0))
-      (Just "Shenzhen, China")
-      "secureAlpacaPassword"
-
-instance ToSample UpdateUserAccount where
-  toSamples _ = singleSample $
-    UpdateUserAccount (Just "New Alpaca Name")
-      (Just "new.email@alpaca.net")
-      (Just NonBinary)
-      Nothing
-      Nothing
-
-instance ToSample UpdatePassword where
-  toSamples _ = singleSample $
-    UpdatePassword "newPassword" "newPassword"
-
-instance ToSample Login where
-  toSamples _ = singleSample $
-    Login "charlie@alpaca.net" "password"
-
-instance ToSample UserSession where
-  toSamples _ = singleSample $
-    UserSession "some-long-token" sampleUser
-
-instance ToSample AuthenticatedUser where
-  toSamples _ = singleSample $ AuthenticatedUser $ UserId 42
 
 -- | Handlers
 
