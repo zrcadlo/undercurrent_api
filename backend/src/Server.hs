@@ -117,7 +117,7 @@ dreamWithEmotions Dream{..} es =
   DreamWithEmotions
     {
       title = dreamTitle
-    , date  = dreamCreatedAt
+    , date  = dreamDreamedAt
     , description = dreamDescription
     , emotions = map emotionName es
     , lucid = dreamIsLucid
@@ -146,6 +146,7 @@ dreamSansEmotions UserId{..} DreamWithEmotions{..} =
         recurring
         private
         starred
+        date
         zeroTime
         zeroTime
 

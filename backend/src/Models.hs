@@ -55,6 +55,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
         isRecurring Bool
         isPrivate Bool
         isStarred Bool
+        dreamedAt UTCTime default=now()
         createdAt UTCTime default=now()
         updatedAt UTCTime default=now()
 
