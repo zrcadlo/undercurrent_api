@@ -18,7 +18,7 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import           RIO.Time                       ( UTCTime )
-import           Database.Persist.Postgresql    (Key, upsert, Entity(..), SqlPersistT, rawExecute,  runSqlPool
+import           Database.Persist.Postgresql    ( Key, upsert, Entity(..), SqlPersistT, rawExecute,  runSqlPool
                                                 , runMigration
                                                 , SqlBackend
                                                 )
@@ -106,6 +106,7 @@ upsertEmotions emotions =
   forM emotions $ \emotion -> do
     Entity id_ _ <- runDB $ upsert emotion []
     return id_
+
 
 -- | Documentation helpers
 

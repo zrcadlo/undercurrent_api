@@ -10,7 +10,7 @@
 module Server where
 
 import Data.Password.Argon2 (hashPassword, checkPassword)
-import Database.Persist.Postgresql (insertMany_, insert, (=.), update, toSqlKey, get, fromSqlKey, Entity (..), getBy, insertUnique)
+import Database.Persist.Postgresql (delete, insertMany_, insert, (=.), update, toSqlKey, get, fromSqlKey, Entity (..), getBy, insertUnique)
 import Import
 import Models
 import Network.Wai
@@ -248,6 +248,7 @@ type Protected =
     :<|> "api" :> "user" :> "password" :> ReqBody '[JSON] UpdatePassword :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] DreamWithEmotions :> PostCreated '[JSON] DreamMeta
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> ReqBody '[JSON] DreamUpdate :> Verb 'PUT 204 '[JSON] NoContent
+    :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> Verb 'DELETE 204 '[JSON] NoContent
 
 type Unprotected = 
     "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
@@ -268,6 +269,7 @@ protected (Authenticated authUser) = (currentUser authUser)
   :<|> (updatePassword authUser)
   :<|> (createDream authUser)
   :<|> (updateDream authUser)
+  :<|> (deleteDream authUser)
 protected _ = throwAll err401
 
 unprotected :: CookieSettings -> JWTSettings -> ServerT Unprotected AppM
@@ -324,8 +326,30 @@ createDream (AuthenticatedUser auId) dream = do
   return $ DreamMeta dreamId now
 
 updateDream :: AuthenticatedUser -> Int64 -> DreamUpdate -> AppM NoContent
-updateDream (AuthenticatedUser auId) dreamId DreamUpdate{..} = do
-  pure NoContent
+updateDream (AuthenticatedUser auId) dreamId updates = do
+  let dreamKey = toSqlKey dreamId :: Key Dream
+  let userKey  = toSqlKey $ userId auId :: Key UserAccount 
+  maybeDream <- runDB $ get dreamKey
+  case maybeDream of
+    Nothing -> throwError $ err404 { errBody = "Dream not found."}
+    Just existingDream -> do
+      if (userKey == (dreamUserId existingDream)) then
+        updateDreamH dreamKey updates >> updateDreamEmotions dreamKey updates >> return NoContent
+      else
+        throwError $ err403 {errBody = "This is not your dream."}
+
+deleteDream :: AuthenticatedUser -> Int64 -> AppM NoContent
+deleteDream (AuthenticatedUser auId) dreamId = do
+  let dreamKey = toSqlKey dreamId :: Key Dream
+  let userKey  = toSqlKey $ userId auId :: Key UserAccount
+  maybeDream <- runDB $ get dreamKey
+  case maybeDream of
+    Nothing -> throwError $ err410 { errBody = "The dream is gone." }
+    Just existingDream -> do
+      if (userKey == (dreamUserId existingDream)) then
+        runDB (delete dreamKey) >> return NoContent
+      else
+        throwError $ err403 {errBody = "This is not your dream."}
 
 -- Unprotected handlers
 
@@ -394,6 +418,28 @@ dreamSansEmotions UserId{..} DreamWithEmotions{..} =
         zeroTime
 
     dbEmotions = map (\e-> Emotion e zeroTime zeroTime) emotions
+
+updateDreamH :: (MonadReader s m, HasDBConnectionPool s, MonadIO m) => Key Dream -> DreamUpdate -> m ()
+updateDreamH dreamKey DreamUpdate{..} =
+    let updates = catMaybes $ [ maybe Nothing (Just . (DreamTitle =.)) updateTitle 
+                , maybe Nothing (Just . (DreamDreamedAt =.)) updateDate
+                , maybe Nothing (Just . (DreamDescription =.)) updateDescription
+                , maybe Nothing (Just . (DreamIsLucid =.)) updateLucid
+                , maybe Nothing (Just . (DreamIsNightmare =.)) updateNightmare
+                , maybe Nothing (Just . (DreamIsRecurring =.)) updateRecurring
+                , maybe Nothing (Just . (DreamIsPrivate =.)) updatePrivate
+                , maybe Nothing (Just . (DreamIsStarred =.)) updateStarred
+                ]
+    in
+        runDB $ update dreamKey updates
+
+updateDreamEmotions :: (MonadReader s m, HasDBConnectionPool s, MonadIO m) => Key Dream -> DreamUpdate -> m ()
+updateDreamEmotions dreamKey DreamUpdate{..} = 
+  case updateEmotions of
+    Nothing -> return ()
+    Just emotions -> return ()
+
+
 
 -- | Server construction
 
