@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Server where
@@ -149,6 +150,18 @@ instance ToSample DreamWithEmotions where
         False
         True
 
+data DreamMeta = DreamMeta
+  {
+    id :: Key Dream
+  , createdAt :: UTCTime
+  } deriving (Eq, Show, Generic)
+
+instance FromJSON DreamMeta
+instance ToJSON DreamMeta
+
+instance ToSample DreamMeta where
+  toSamples _ =  [("Useful information for a just-created dream", DreamMeta {id = toSqlKey 42, createdAt = zeroTime})]
+
 data DreamUpdate = DreamUpdate
   { 
     updateTitle :: Maybe Text
@@ -221,6 +234,11 @@ instance ToSample UserSession where
   toSamples _ = singleSample $
     UserSession "some-long-token" sampleUser
 
+-- sad trombone: orphan instance. The servant docs totally expect this:
+-- {-# OPTIONS_GHC -fno-warn-orphans #-}
+instance ToCapture (Capture "dreamId" Int64) where
+  toCapture _ = DocCapture "dreamId" "ID of the dream to update, as returned when creating it."
+
 -- | API types
 -- inspired by: https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
 
@@ -228,8 +246,8 @@ type Protected =
   "api" :> "user" :> Get '[JSON] UserAccount
     :<|> "api" :> "user" :> ReqBody '[JSON] UpdateUserAccount :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "password" :> ReqBody '[JSON] UpdatePassword :> Verb 'PUT 204 '[JSON] NoContent
-    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] DreamWithEmotions :> PostCreated '[JSON] DreamWithEmotions
-    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] DreamUpdate :> Verb 'PUT 204 '[JSON] NoContent
+    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] DreamWithEmotions :> PostCreated '[JSON] DreamMeta
+    :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> ReqBody '[JSON] DreamUpdate :> Verb 'PUT 204 '[JSON] NoContent
 
 type Unprotected = 
     "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
@@ -295,17 +313,18 @@ updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
           runDB $ update (toSqlKey (userId auId)) [UserAccountPassword =. pwHash, UserAccountUpdatedAt =. Just now]
           return NoContent
 
-createDream :: AuthenticatedUser -> DreamWithEmotions -> AppM DreamWithEmotions
+createDream :: AuthenticatedUser -> DreamWithEmotions -> AppM DreamMeta
 createDream (AuthenticatedUser auId) dream = do
   let (dbDream, dbEmotions) = dreamSansEmotions auId dream
+  now <- getCurrentTime
   dreamId <- runDB $ insert dbDream
   emotionIds <- upsertEmotions dbEmotions
   dreamEmotions <- mapM (\eid -> pure $ DreamEmotion dreamId eid zeroTime zeroTime) emotionIds
   runDB $ insertMany_ dreamEmotions
-  return dream
+  return $ DreamMeta dreamId now
 
-updateDream :: AuthenticatedUser -> DreamUpdate -> AppM NoContent
-updateDream (AuthenticatedUser auId) DreamUpdate{..} = do
+updateDream :: AuthenticatedUser -> Int64 -> DreamUpdate -> AppM NoContent
+updateDream (AuthenticatedUser auId) dreamId DreamUpdate{..} = do
   pure NoContent
 
 -- Unprotected handlers
