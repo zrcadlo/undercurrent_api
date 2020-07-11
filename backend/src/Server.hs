@@ -386,14 +386,14 @@ sessionWithUser jwts sessionUserId = do
         Left _ -> throwError $ err500 {errBody = "Unable to generate session token."}
         Right t -> return $ UserSession (decodeUtf8Lenient $ toStrict t) user
 
-dreamWithEmotions :: Dream -> [Emotion] -> DreamWithEmotions
-dreamWithEmotions Dream{..} es =
+dreamWithEmotions :: (Dream, [EmotionLabel]) -> DreamWithEmotions
+dreamWithEmotions (Dream{..}, els) =
   DreamWithEmotions
     {
       title = dreamTitle
     , date  = dreamDreamedAt
     , description = dreamDescription
-    , emotions = map emotionName es
+    , emotions = els
     , lucid = dreamIsLucid
     , nightmare = dreamIsNightmare
     , recurring = dreamIsRecurring

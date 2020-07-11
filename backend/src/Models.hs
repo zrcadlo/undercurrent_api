@@ -32,6 +32,7 @@ import           Data.Password.Argon2           ( Argon2
 import Servant.Docs
 import Data.Aeson.Types
 import qualified Database.Esqueleto as E
+import qualified Database.Esqueleto.PostgreSQL as E
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
@@ -116,10 +117,16 @@ allDreamEmotionIds dreamId = do
             return $ dreamEmotion E.^. DreamEmotionEmotionId
     return $ map E.unValue entries
 
-
---    entries <- runDB $ (selectList [DreamId =. dreamId] [] :: [DreamEmotion])
---    return $ map emotionId entries
-
+userDreams :: (MonadReader s m, HasDBConnectionPool s, MonadIO m) => Key UserAccount -> Bool -> m [(Dream, [EmotionLabel])]
+userDreams userId includePrivate = do
+    entries <-
+        runDB . E.select . E.from $ \(dream `E.InnerJoin` dreamEmotion `E.InnerJoin` emotion) -> do
+            E.on  (emotion E.^. EmotionId E.==. dreamEmotion E.^. DreamEmotionEmotionId)
+            E.on  (dream E.^. DreamId E.==. dreamEmotion E.^. DreamEmotionDreamId)
+            E.where_ (dream E.^. DreamUserId E.==. (E.val userId) E.&&. dream E.^. DreamIsPrivate E.==. (E.val includePrivate))
+            E.groupBy (dream E.^.DreamId)
+            return $ (dream, E.arrayAgg $ emotion E.^. EmotionName)
+    return $ map (\(Entity _ dream, el) -> (dream, maybe [] id $ E.unValue $ el)) entries
 
 -- | Documentation helpers
 
