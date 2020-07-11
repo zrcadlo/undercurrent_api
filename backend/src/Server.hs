@@ -235,10 +235,14 @@ instance ToSample UserSession where
   toSamples _ = singleSample $
     UserSession "some-long-token" sampleUser
 
--- sad trombone: orphan instance. The servant docs totally expect this:
+-- sad trombone: orphan instances. The servant docs totally expect this:
 -- {-# OPTIONS_GHC -fno-warn-orphans #-}
 instance ToCapture (Capture "dreamId" Int64) where
   toCapture _ = DocCapture "dreamId" "ID of the dream to update, as returned when creating it."
+
+-- TODO: need an "external id"??
+instance ToCapture (Capture "userId" Int64) where
+  toCapture _ = DocCapture "userId" "ID of the user to inspect, as returned when creating it."
 
 -- | API types
 -- inspired by: https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
@@ -255,10 +259,17 @@ type Unprotected =
     "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
     :<|> "api" :> "login" :> ReqBody '[JSON] Login :> PostCreated '[JSON] UserSession
 
+-- TODO(luis) add a limit/pagination
+type KindaProtected =
+  "api" :> "users" :> Capture "userId" Int64 :> "dreams" :> Get '[JSON] [DreamWithEmotions] 
+
 type Static =
   "docs" :> Raw
 
-type Api auths = (Auth auths AuthenticatedUser :> Protected) :<|> Unprotected :<|> Static
+type Api auths = (Auth auths AuthenticatedUser :> Protected) 
+  :<|> Unprotected 
+  :<|> (Auth auths AuthenticatedUser :> KindaProtected)
+  :<|> Static
 
 type AppM = ReaderT App Servant.Handler
 
@@ -272,6 +283,9 @@ protected (Authenticated authUser) = (currentUser authUser)
   :<|> (updateDream authUser)
   :<|> (deleteDream authUser)
 protected _ = throwAll err401
+
+kindaProtected :: AuthResult AuthenticatedUser -> ServerT KindaProtected AppM
+kindaProtected authResult = allUserDreams authResult
 
 unprotected :: CookieSettings -> JWTSettings -> ServerT Unprotected AppM
 unprotected cs jwts = createUser cs jwts :<|> login cs jwts
@@ -373,6 +387,19 @@ login _ jwts Login{..} = do
         PasswordCheckFail -> throwError $ err401 {errBody = "Invalid email or password."}
         PasswordCheckSuccess -> sessionWithUser jwts userId
 
+
+-- Handlers that check their own authentication
+
+-- TODO: do we need to apply filters here, too?
+allUserDreams :: AuthResult AuthenticatedUser -> Int64 -> AppM [DreamWithEmotions]
+allUserDreams authResult requestedId = do
+  let requestedUserId = toSqlKey requestedId :: Key UserAccount
+  let isOwner = case authResult of
+                  Authenticated (AuthenticatedUser auId) -> (toSqlKey $ userId $ auId) == requestedUserId
+                  _ -> False
+  requestedDreams <- userDreams requestedUserId isOwner
+  return $ map dreamWithEmotions requestedDreams
+
 -- | Handler helpers:
 
 sessionWithUser :: JWTSettings -> (Key UserAccount) -> AppM UserSession
@@ -472,7 +499,10 @@ docsH = return serveDocs where
                                        \(where `THE_TOKEN` is what's returned in the `token` property after logging in or creating a user.)"]
 
 apiServer :: CookieSettings -> JWTSettings -> ServerT (Api auths) AppM
-apiServer cs jwts = protected :<|> unprotected cs jwts :<|> docsH
+apiServer cs jwts = protected 
+  :<|> unprotected cs jwts
+  :<|> kindaProtected
+  :<|> docsH
 
 proxyApi :: Proxy (Api '[JWT])
 proxyApi = Proxy
