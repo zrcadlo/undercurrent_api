@@ -245,7 +245,11 @@ type AppM = ReaderT App Servant.Handler
 -- | Handlers
 
 protected :: AuthResult AuthenticatedUser -> ServerT Protected AppM
-protected (Authenticated authUser) = (currentUser authUser) :<|> (updateUser authUser) :<|> (updatePassword authUser) :<|> (createDream authUser)
+protected (Authenticated authUser) = (currentUser authUser) 
+  :<|> (updateUser authUser)
+  :<|> (updatePassword authUser)
+  :<|> (createDream authUser)
+  :<|> (updateDream authUser)
 protected _ = throwAll err401
 
 unprotected :: CookieSettings -> JWTSettings -> ServerT Unprotected AppM
@@ -299,6 +303,10 @@ createDream (AuthenticatedUser auId) dream = do
   dreamEmotions <- mapM (\eid -> pure $ DreamEmotion dreamId eid zeroTime zeroTime) emotionIds
   runDB $ insertMany_ dreamEmotions
   return dream
+
+updateDream :: AuthenticatedUser -> DreamUpdate -> AppM NoContent
+updateDream (AuthenticatedUser auId) DreamUpdate{..} = do
+  pure NoContent
 
 -- Unprotected handlers
 
