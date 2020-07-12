@@ -127,16 +127,16 @@ A JWT Token signed with this server's key
 []
 ```
 
-- Example (`application/json;charset=utf-8`, `application/json`):
+- A dream with the dream id and dreamer id included (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-[{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses"}]
+[{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses"}]
 ```
 
-- Example (`application/json;charset=utf-8`):
+- A dream with the dream id and dreamer id included, A dream with the dream id and dreamer id included (`application/json;charset=utf-8`):
 
 ```javascript
-[{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses"},{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses"}]
+[{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses"},{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses"}]
 ```
 
 ## POST /api/user/dreams
@@ -173,10 +173,10 @@ A JWT Token signed with this server's key
     - `application/json;charset=utf-8`
     - `application/json`
 
-- Useful information for a just-created dream (`application/json;charset=utf-8`, `application/json`):
+- A dream with the dream id and dreamer id included (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-{"createdAt":"2020-07-07T00:00:00Z","id":42}
+{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses"}
 ```
 
 ## DELETE /api/user/dreams/:dreamId
@@ -356,16 +356,16 @@ A JWT Token signed with this server's key
 []
 ```
 
-- Example (`application/json;charset=utf-8`, `application/json`):
+- A dream with the dream id and dreamer id included (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-[{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses"}]
+[{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses"}]
 ```
 
-- Example (`application/json;charset=utf-8`):
+- A dream with the dream id and dreamer id included, A dream with the dream id and dreamer id included (`application/json;charset=utf-8`):
 
 ```javascript
-[{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses"},{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses"}]
+[{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses"},{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses"}]
 ```
 
 ## GET /docs
