@@ -18,7 +18,7 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import           RIO.Time                       ( UTCTime )
-import           Database.Persist.Postgresql    (Key, upsert, Entity(..), SqlPersistT, rawExecute,  runSqlPool
+import           Database.Persist.Postgresql    (Key, Entity(..), SqlPersistT, rawExecute,  runSqlPool
                                                 , runMigration
                                                 , SqlBackend
                                                 )
@@ -32,7 +32,8 @@ import           Data.Password.Argon2           ( Argon2
 import Servant.Docs
 import Data.Aeson.Types
 import qualified Database.Esqueleto as E
-import qualified Database.Esqueleto.PostgreSQL as E
+-- uncomment for special operators like arrayAgg
+--import qualified Database.Esqueleto.PostgreSQL as E
 import Database.Esqueleto.PostgreSQL.JSON (JSONB)
 
 
@@ -105,30 +106,13 @@ runDB query = do
 
 -- | Queries
 
-upsertEmotions :: (MonadIO m, HasDBConnectionPool s, MonadReader s m) => [Emotion] -> m [Key Emotion]
-upsertEmotions emotions =
-  forM emotions $ \emotion -> do
-    Entity id_ _ <- runDB $ upsert emotion []
-    return id_
-
-allDreamEmotionIds :: (MonadIO m, HasDBConnectionPool s, MonadReader s m) => Key Dream -> m [Key Emotion]
-allDreamEmotionIds dreamId = do
-    entries <- 
-        runDB . E.select . E.from $ \dreamEmotion -> do
-            E.where_ (dreamEmotion E.^. DreamEmotionDreamId E.==. (E.val dreamId))
-            return $ dreamEmotion E.^. DreamEmotionEmotionId
-    return $ map E.unValue entries
-
-userDreams :: (MonadReader s m, HasDBConnectionPool s, MonadIO m) => Key UserAccount -> Bool -> m [(Dream, [EmotionLabel])]
+userDreams :: (MonadReader s m, HasDBConnectionPool s, MonadIO m) => Key UserAccount -> Bool -> m [Entity Dream]
 userDreams userId includePrivate = do
     entries <-
-        runDB . E.select . E.from $ \(dream `E.InnerJoin` dreamEmotion `E.InnerJoin` emotion) -> do
-            E.on  (emotion E.^. EmotionId E.==. dreamEmotion E.^. DreamEmotionEmotionId)
-            E.on  (dream E.^. DreamId E.==. dreamEmotion E.^. DreamEmotionDreamId)
+        runDB . E.select . E.from $ \dream -> do
             E.where_ (dream E.^. DreamUserId E.==. (E.val userId) E.&&. dream E.^. DreamIsPrivate E.==. (E.val includePrivate))
-            E.groupBy (dream E.^.DreamId)
-            return $ (dream, E.arrayAgg $ emotion E.^. EmotionName)
-    return $ map (\(Entity _ dream, el) -> (dream, maybe [] id $ E.unValue $ el)) entries
+            return dream
+    return entries
 
 -- | Documentation helpers
 

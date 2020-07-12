@@ -28,7 +28,7 @@ import Servant.Docs
 import Servant.Auth.Docs()
 import Util
 import RIO.Partial (fromJust)
-import Database.Esqueleto.PostgreSQL.JSON (JSONB(JSONB))
+import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
 
 -- | "Resource" types
 
@@ -122,7 +122,7 @@ instance FromJWT AuthenticatedUser
 instance ToSample AuthenticatedUser where
   toSamples _ = singleSample $ AuthenticatedUser $ UserId 42
 
-data DreamWithEmotions = DreamWithEmotions
+data NewDream = NewDream
   {
     title :: Text
   , date  :: UTCTime
@@ -135,13 +135,13 @@ data DreamWithEmotions = DreamWithEmotions
   , starred :: Bool
   } deriving (Eq, Show, Generic)
 
-instance FromJSON DreamWithEmotions
-instance ToJSON DreamWithEmotions
+instance FromJSON NewDream
+instance ToJSON NewDream
 
-instance ToSample DreamWithEmotions where
+instance ToSample NewDream where
   toSamples _ = 
     singleSample $ 
-      DreamWithEmotions "I dream of Alpacas"
+      NewDream "I dream of Alpacas"
         zeroTime
         "Some alpacas were wearing sunglasses"
         (map (fromJust . mkEmotionLabel) ["joy", "intimidated"])
@@ -162,6 +162,61 @@ instance ToJSON DreamMeta
 
 instance ToSample DreamMeta where
   toSamples _ =  [("Useful information for a just-created dream", DreamMeta {id = toSqlKey 42, createdAt = zeroTime})]
+
+data DreamWithKeys = DreamWithKeys
+  {
+    dkTitle :: Text
+  , dkDate  :: UTCTime
+  , dkDescription :: Text
+  , dkEmotions :: [EmotionLabel]
+  , dkLucid :: Bool
+  , dkNightmare :: Bool
+  , dkRecurring :: Bool
+  , dkPrivate :: Bool
+  , dkStarred :: Bool
+  , dkDreamerId :: Key UserAccount
+  , dkDreamId :: Key Dream
+  } deriving (Eq, Show, Generic)
+
+instance FromJSON DreamWithKeys where
+  parseJSON = genericParseJSON defaultOptions{fieldLabelModifier = dropPrefix "dk"}
+
+instance ToJSON DreamWithKeys where
+  toJSON = genericToJSON defaultOptions{fieldLabelModifier = dropPrefix "dk"}
+
+dreamWithKeys :: (Entity Dream) -> DreamWithKeys
+dreamWithKeys (Entity dreamId Dream{..}) =
+  DreamWithKeys
+    {
+      dkTitle = dreamTitle
+    , dkDate  = dreamDreamedAt
+    , dkDescription = dreamDescription
+    , dkEmotions = (unJSONB $ dreamEmotions)
+    , dkLucid = dreamIsLucid
+    , dkNightmare = dreamIsNightmare
+    , dkRecurring = dreamIsRecurring
+    , dkPrivate = dreamIsPrivate
+    , dkStarred = dreamIsStarred
+    , dkDreamerId = dreamUserId
+    , dkDreamId = dreamId
+    } 
+
+instance ToSample DreamWithKeys where
+  toSamples _ =
+    [("A dream with the dream id and dreamer id included", sampleDreamWithKeys)]
+    where
+      sampleDreamWithKeys =
+        DreamWithKeys "I dreamed of our alpacas"
+          zeroTime
+          "Some alpacas were wearing sunglasses"
+          (map (fromJust . mkEmotionLabel) ["joy", "intimidated"])
+          False
+          False
+          True
+          False
+          True
+          (toSqlKey 42)
+          (toSqlKey 42)
 
 data DreamUpdate = DreamUpdate
   { 
@@ -251,10 +306,10 @@ type Protected =
   "api" :> "user" :> Get '[JSON] UserAccount
     :<|> "api" :> "user" :> ReqBody '[JSON] UpdateUserAccount :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "password" :> ReqBody '[JSON] UpdatePassword :> Verb 'PUT 204 '[JSON] NoContent
-    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] DreamWithEmotions :> PostCreated '[JSON] DreamMeta
+    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] NewDream :> PostCreated '[JSON] DreamMeta
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> ReqBody '[JSON] DreamUpdate :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> Verb 'DELETE 204 '[JSON] NoContent
-    :<|> "api" :> "user" :> "dreams" :> Get '[JSON] [DreamWithEmotions]
+    :<|> "api" :> "user" :> "dreams" :> Get '[JSON] [DreamWithKeys]
 
 type Unprotected = 
     "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
@@ -262,7 +317,7 @@ type Unprotected =
 
 -- TODO(luis) add a limit/pagination
 type KindaProtected =
-  "api" :> "users" :> Capture "userId" Int64 :> "dreams" :> Get '[JSON] [DreamWithEmotions] 
+  "api" :> "users" :> Capture "userId" Int64 :> "dreams" :> Get '[JSON] [DreamWithKeys] 
 
 type Static =
   "docs" :> Raw
@@ -332,8 +387,8 @@ updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
           runDB $ update (toSqlKey (userId auId)) [UserAccountPassword =. pwHash, UserAccountUpdatedAt =. Just now]
           return NoContent
 
-createDream :: AuthenticatedUser -> DreamWithEmotions -> AppM DreamMeta
-createDream (AuthenticatedUser auId) DreamWithEmotions{..} = do
+createDream :: AuthenticatedUser -> NewDream -> AppM DreamMeta
+createDream (AuthenticatedUser auId) NewDream{..} = do
   let dbDream = Dream (toSqlKey $ userId $ auId)
         title
         description
@@ -378,13 +433,11 @@ deleteDream (AuthenticatedUser auId) dreamId = do
         throwError $ err403 {errBody = "This is not your dream."}
 
 -- TODO: do we need pagination and filtering here?
-myDreams :: AuthenticatedUser -> AppM [DreamWithEmotions]
+myDreams :: AuthenticatedUser -> AppM [DreamWithKeys]
 myDreams (AuthenticatedUser auId) = do
   let userKey = toSqlKey $ userId auId :: Key UserAccount
   allMyDreams <- userDreams userKey True
-  -- TODO: this is doing a double `map` (here and in Models.hs)
-  -- maybe we can compose those in one place vs. in two?
-  return $ map dreamWithEmotions allMyDreams
+  return $ map dreamWithKeys allMyDreams
 
 -- Unprotected handlers
 
@@ -410,14 +463,14 @@ login _ jwts Login{..} = do
 -- Handlers that check their own authentication
 
 -- TODO: do we need to apply filters here, too?
-allUserDreams :: AuthResult AuthenticatedUser -> Int64 -> AppM [DreamWithEmotions]
+allUserDreams :: AuthResult AuthenticatedUser -> Int64 -> AppM [DreamWithKeys]
 allUserDreams authResult requestedId = do
   let requestedUserId = toSqlKey requestedId :: Key UserAccount
   let isOwner = case authResult of
                   Authenticated (AuthenticatedUser auId) -> (toSqlKey $ userId $ auId) == requestedUserId
                   _ -> False
   requestedDreams <- userDreams requestedUserId isOwner
-  return $ map dreamWithEmotions requestedDreams
+  return $ map dreamWithKeys requestedDreams
 
 -- | Handler helpers:
 
@@ -431,24 +484,6 @@ sessionWithUser jwts sessionUserId = do
       case token of
         Left _ -> throwError $ err500 {errBody = "Unable to generate session token."}
         Right t -> return $ UserSession (decodeUtf8Lenient $ toStrict t) user
-
-dreamWithEmotions :: (Dream, [EmotionLabel]) -> DreamWithEmotions
-dreamWithEmotions (Dream{..}, els) =
-  DreamWithEmotions
-    {
-      title = dreamTitle
-    , date  = dreamDreamedAt
-    , description = dreamDescription
-    , emotions = els
-    , lucid = dreamIsLucid
-    , nightmare = dreamIsNightmare
-    , recurring = dreamIsRecurring
-    , private = dreamIsPrivate
-    , starred = dreamIsStarred
-    } 
-
-toEmotion :: EmotionLabel -> Emotion
-toEmotion e = Emotion e zeroTime zeroTime
 
 updateDreamH :: (MonadReader s m, HasDBConnectionPool s, MonadIO m) => Key Dream -> DreamUpdate -> m ()
 updateDreamH dreamKey DreamUpdate{..} =
