@@ -10,7 +10,7 @@
 module Server where
 
 import Data.Password.Argon2 (hashPassword, checkPassword)
-import Database.Persist.Postgresql (delete, deleteBy, insertMany_, insert, (=.), update, toSqlKey, get, fromSqlKey, Entity (..), getBy, insertUnique)
+import Database.Persist.Postgresql (delete, insert, (=.), update, toSqlKey, get, fromSqlKey, Entity (..), getBy, insertUnique)
 import Import
 import Models
 import Network.Wai
@@ -28,7 +28,7 @@ import Servant.Docs
 import Servant.Auth.Docs()
 import Util
 import RIO.Partial (fromJust)
-import RIO.List ((\\))
+import Database.Esqueleto.PostgreSQL.JSON (JSONB(JSONB))
 
 -- | "Resource" types
 
@@ -333,13 +333,22 @@ updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
           return NoContent
 
 createDream :: AuthenticatedUser -> DreamWithEmotions -> AppM DreamMeta
-createDream (AuthenticatedUser auId) dream = do
-  let (dbDream, dbEmotions) = dreamSansEmotions auId dream
+createDream (AuthenticatedUser auId) DreamWithEmotions{..} = do
+  let dbDream = Dream (toSqlKey $ userId $ auId)
+        title
+        description
+        lucid
+        nightmare
+        recurring
+        private
+        starred
+        (JSONB emotions)
+        date
+        zeroTime
+        zeroTime
+    
   now <- getCurrentTime
   dreamId <- runDB $ insert dbDream
-  emotionIds <- upsertEmotions dbEmotions
-  dreamEmotions <- mapM (\eid -> pure $ DreamEmotion dreamId eid zeroTime zeroTime) emotionIds
-  runDB $ insertMany_ dreamEmotions
   return $ DreamMeta dreamId now
 
 updateDream :: AuthenticatedUser -> Int64 -> DreamUpdate -> AppM NoContent
@@ -351,7 +360,7 @@ updateDream (AuthenticatedUser auId) dreamId updates = do
     Nothing -> throwError $ err404 { errBody = "Dream not found."}
     Just existingDream -> do
       if (userKey == (dreamUserId existingDream)) then
-        updateDreamH dreamKey updates >> updateDreamEmotions dreamKey updates >> return NoContent
+        updateDreamH dreamKey updates >> return NoContent
       else
         throwError $ err403 {errBody = "This is not your dream."}
 
@@ -441,25 +450,6 @@ dreamWithEmotions (Dream{..}, els) =
 toEmotion :: EmotionLabel -> Emotion
 toEmotion e = Emotion e zeroTime zeroTime
 
-dreamSansEmotions :: UserId -> DreamWithEmotions -> (Dream, [Emotion])
-dreamSansEmotions UserId{..} DreamWithEmotions{..} =
-  (dream, dbEmotions)
-  where
-    dream = 
-      Dream (toSqlKey userId)
-        title
-        description
-        lucid
-        nightmare
-        recurring
-        private
-        starred
-        date
-        zeroTime
-        zeroTime
-
-    dbEmotions = map toEmotion emotions
-
 updateDreamH :: (MonadReader s m, HasDBConnectionPool s, MonadIO m) => Key Dream -> DreamUpdate -> m ()
 updateDreamH dreamKey DreamUpdate{..} =
     let updates = catMaybes $ [ maybe Nothing (Just . (DreamTitle =.)) updateTitle 
@@ -470,28 +460,10 @@ updateDreamH dreamKey DreamUpdate{..} =
                 , maybe Nothing (Just . (DreamIsRecurring =.)) updateRecurring
                 , maybe Nothing (Just . (DreamIsPrivate =.)) updatePrivate
                 , maybe Nothing (Just . (DreamIsStarred =.)) updateStarred
+                , maybe Nothing (Just . (\e -> DreamEmotions =. JSONB e)) updateEmotions
                 ]
     in
         runDB $ update dreamKey updates
-
-updateDreamEmotions :: (MonadReader s m, HasDBConnectionPool s, MonadIO m) => Key Dream -> DreamUpdate -> m ()
-updateDreamEmotions dreamKey DreamUpdate{..} = 
-  case updateEmotions of
-    Nothing -> return ()
-    Just emotions -> do
-      let dbEmotions = map toEmotion emotions
-      newEmotionIds <- upsertEmotions dbEmotions
-      oldEmotionIds <- allDreamEmotionIds dreamKey
-      -- delete all emotions currently in the DB that are no longer in the dream
-      forM_ (oldEmotionIds \\ newEmotionIds) $ \discardedEmotion -> do
-        runDB $ deleteBy $ UniqueDreamEmotion dreamKey discardedEmotion
-      -- insert all new emotions
-      emotionsToInsert <- 
-        forM (newEmotionIds \\ oldEmotionIds) $ \newEmotion -> 
-          pure $ DreamEmotion dreamKey newEmotion zeroTime zeroTime 
-      runDB $ insertMany_ emotionsToInsert
-      -- notice that the intersection of old and new emotions should be left untouched!
-      pure ()
 
 -- | Server construction
 

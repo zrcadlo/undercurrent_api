@@ -33,6 +33,7 @@ import Servant.Docs
 import Data.Aeson.Types
 import qualified Database.Esqueleto as E
 import qualified Database.Esqueleto.PostgreSQL as E
+import Database.Esqueleto.PostgreSQL.JSON (JSONB)
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
@@ -57,6 +58,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
         isRecurring Bool
         isPrivate Bool
         isStarred Bool
+        emotions  (JSONB [EmotionLabel])
         dreamedAt UTCTime default=now()
         createdAt UTCTime default=now()
         updatedAt UTCTime default=now()
