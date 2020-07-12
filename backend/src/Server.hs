@@ -10,7 +10,7 @@
 module Server where
 
 import Data.Password.Argon2 (hashPassword, checkPassword)
-import Database.Persist.Postgresql (delete, insert, (=.), update, toSqlKey, get, fromSqlKey, Entity (..), getBy, insertUnique)
+import Database.Persist.Postgresql (insertEntity, delete, (=.), update, toSqlKey, get, fromSqlKey, Entity (..), getBy, insertUnique)
 import Import
 import Models
 import Network.Wai
@@ -150,18 +150,6 @@ instance ToSample NewDream where
         True
         False
         True
-
-data DreamMeta = DreamMeta
-  {
-    id :: Key Dream
-  , createdAt :: UTCTime
-  } deriving (Eq, Show, Generic)
-
-instance FromJSON DreamMeta
-instance ToJSON DreamMeta
-
-instance ToSample DreamMeta where
-  toSamples _ =  [("Useful information for a just-created dream", DreamMeta {id = toSqlKey 42, createdAt = zeroTime})]
 
 data DreamWithKeys = DreamWithKeys
   {
@@ -306,7 +294,7 @@ type Protected =
   "api" :> "user" :> Get '[JSON] UserAccount
     :<|> "api" :> "user" :> ReqBody '[JSON] UpdateUserAccount :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "password" :> ReqBody '[JSON] UpdatePassword :> Verb 'PUT 204 '[JSON] NoContent
-    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] NewDream :> PostCreated '[JSON] DreamMeta
+    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] NewDream :> PostCreated '[JSON] DreamWithKeys
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> ReqBody '[JSON] DreamUpdate :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> Verb 'DELETE 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "dreams" :> Get '[JSON] [DreamWithKeys]
@@ -387,7 +375,7 @@ updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
           runDB $ update (toSqlKey (userId auId)) [UserAccountPassword =. pwHash, UserAccountUpdatedAt =. Just now]
           return NoContent
 
-createDream :: AuthenticatedUser -> NewDream -> AppM DreamMeta
+createDream :: AuthenticatedUser -> NewDream -> AppM DreamWithKeys
 createDream (AuthenticatedUser auId) NewDream{..} = do
   let dbDream = Dream (toSqlKey $ userId $ auId)
         title
@@ -402,9 +390,8 @@ createDream (AuthenticatedUser auId) NewDream{..} = do
         zeroTime
         zeroTime
     
-  now <- getCurrentTime
-  dreamId <- runDB $ insert dbDream
-  return $ DreamMeta dreamId now
+  dreamEntity <- runDB $ insertEntity dbDream
+  return $ dreamWithKeys dreamEntity
 
 updateDream :: AuthenticatedUser -> Int64 -> DreamUpdate -> AppM NoContent
 updateDream (AuthenticatedUser auId) dreamId updates = do
