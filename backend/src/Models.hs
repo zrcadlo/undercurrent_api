@@ -147,4 +147,4 @@ instance ToSample UserAccount where
 -- | Concessions to testing
 
 dropModels :: (MonadIO m) => SqlPersistT m ()
-dropModels = rawExecute "TRUNCATE TABLE user_account RESTART IDENTITY" []
+dropModels = rawExecute "TRUNCATE TABLE user_account, dream, emotion, dream_emotion RESTART IDENTITY" []

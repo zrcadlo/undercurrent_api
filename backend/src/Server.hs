@@ -254,6 +254,7 @@ type Protected =
     :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] DreamWithEmotions :> PostCreated '[JSON] DreamMeta
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> ReqBody '[JSON] DreamUpdate :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> Verb 'DELETE 204 '[JSON] NoContent
+    :<|> "api" :> "user" :> "dreams" :> Get '[JSON] [DreamWithEmotions]
 
 type Unprotected = 
     "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
@@ -282,6 +283,7 @@ protected (Authenticated authUser) = (currentUser authUser)
   :<|> (createDream authUser)
   :<|> (updateDream authUser)
   :<|> (deleteDream authUser)
+  :<|> (myDreams authUser)
 protected _ = throwAll err401
 
 kindaProtected :: AuthResult AuthenticatedUser -> ServerT KindaProtected AppM
@@ -366,6 +368,15 @@ deleteDream (AuthenticatedUser auId) dreamId = do
       else
         throwError $ err403 {errBody = "This is not your dream."}
 
+-- TODO: do we need pagination and filtering here?
+myDreams :: AuthenticatedUser -> AppM [DreamWithEmotions]
+myDreams (AuthenticatedUser auId) = do
+  let userKey = toSqlKey $ userId auId :: Key UserAccount
+  allMyDreams <- userDreams userKey True
+  -- TODO: this is doing a double `map` (here and in Models.hs)
+  -- maybe we can compose those in one place vs. in two?
+  return $ map dreamWithEmotions allMyDreams
+
 -- Unprotected handlers
 
 createUser :: CookieSettings -> JWTSettings -> NewUserAccount -> AppM UserSession
@@ -386,7 +397,6 @@ login _ jwts Login{..} = do
       case (checkPassword loginPassword (userAccountPassword user)) of
         PasswordCheckFail -> throwError $ err401 {errBody = "Invalid email or password."}
         PasswordCheckSuccess -> sessionWithUser jwts userId
-
 
 -- Handlers that check their own authentication
 
