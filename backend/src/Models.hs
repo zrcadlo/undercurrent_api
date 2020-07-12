@@ -32,6 +32,7 @@ import           Data.Password.Argon2           ( Argon2 )
 import           Servant.Docs
 import           Data.Aeson.Types
 import qualified Database.Esqueleto            as E
+import qualified Database.Esqueleto.PostgreSQL.JSON as E
 -- uncomment for special operators like arrayAgg
 --import qualified Database.Esqueleto.PostgreSQL as E
 import           Database.Esqueleto.PostgreSQL.JSON
@@ -117,6 +118,20 @@ userDreams userId isOwner = do
                 )
         return dream
     return entries
+
+-- TODO: actually need a buncha more filters:
+-- for reference:
+-- https://gist.github.com/bitemyapp/89c5e0663bddc3b1c78f5e3fa33e7dc4#file-companiescount-hs-L163
+-- https://github.com/bitemyapp/esqueleto/blob/master/test/PostgreSQL/Test.hs#L1116
+-- 
+filteredDreams
+    :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
+    => [EmotionLabel]
+    -> m [Entity Dream]
+filteredDreams emotions = do
+    runDB . E.select . E.from $ \dream -> do
+        E.where_ (E.just (dream E.^. DreamEmotions) E.@>. (E.jsonbVal emotions))
+        return dream
 
 -- | Documentation helpers
 
