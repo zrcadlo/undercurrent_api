@@ -22,6 +22,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import Data.Either (fromRight)
 import RIO.ByteString.Lazy (toStrict)
 import RIO.Time (fromGregorian, UTCTime(..))
+import Util
 
 testDB :: DatabaseUrl
 testDB = "postgresql://localhost/undercurrent_test?user=luis"
@@ -59,7 +60,7 @@ setupData = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
     
     -- insert some "givens"
     hashedPw <- hashPassword "secureAlpacaPassword"
-    _ <- insert $
+    nena <- insert $
          UserAccount "nena@alpaca.net"
             hashedPw
             "Nena Alpaca"
@@ -68,6 +69,18 @@ setupData = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
             (Just "Tokyo, Japan") 
             (Just (UTCTime (fromGregorian 2017 2 14) 0)) 
             (Just (UTCTime (fromGregorian 2017 2 14) 0))
+
+    charlie <- insert $
+            UserAccount "charlie@alpaca.net"
+                hashedPw
+                "Charlie Alpaca"
+                Male
+                (Just zeroTime)
+                (Just "Tokyo Japan")
+                (Just zeroTime)
+                (Just zeroTime)
+
+    
 
     return ()
 
