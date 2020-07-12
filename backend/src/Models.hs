@@ -98,16 +98,23 @@ userDreams
     => Key UserAccount
     -> Bool
     -> m [Entity Dream]
-userDreams userId includePrivate = do
+userDreams userId isOwner = do
     entries <- runDB . E.select . E.from $ \dream -> do
-        E.where_
-            (     dream
-            E.^.  DreamUserId
-            E.==. (E.val userId)
-            E.&&. dream
-            E.^.  DreamIsPrivate
-            E.==. (E.val includePrivate)
-            )
+        if isOwner then
+            E.where_
+                (     dream
+                E.^.  DreamUserId
+                E.==. (E.val userId)
+                )
+        else
+           E.where_
+                (     dream
+                E.^.  DreamUserId
+                E.==. (E.val userId)
+                E.&&. dream
+                E.^.  DreamIsPrivate
+                E.==. (E.val False)
+                )
         return dream
     return entries
 
