@@ -138,7 +138,7 @@ data DreamFilters = DreamFilters
     , filterBefore :: Maybe UTCTime
     , filterAfter :: Maybe UTCTime  
     , filterLimit :: Maybe Int64
-    , filterOffset :: Maybe Int64
+    , filterLastSeenId :: Maybe (Key Dream)
     } deriving (Eq, Show, Generic)
 
 instance FromJSON DreamFilters
@@ -227,8 +227,10 @@ filteredDreams DreamFilters{..} userConditions = do
         maybeNoConditions (\g -> E.where_ (userAccount E.^. UserAccountGender E.==. E.val g)) filterGender
         maybeNoConditions (\before -> E.where_ (dream E.^. DreamDreamedAt E.<=. E.val before)) filterBefore
         maybeNoConditions (\after -> E.where_ (dream E.^. DreamDreamedAt  E.>=. E.val after)) filterAfter
-        E.limit $ maybe 100 id filterLimit
-        E.offset $ maybe 0 id filterOffset -- TODO: use pages?
+        -- keyset pagination
+        maybeNoConditions (\lastSeen -> E.where_(dream E.^. DreamId E.>. E.val lastSeen)) filterLastSeenId
+        -- default page size is 200, max is 1000.
+        E.limit $ maybe 200 (\l-> if l > 1000 then 1000 else l) filterLimit
         E.orderBy [ E.desc (dream E.^. DreamDreamedAt) ] -- TODO: need an index?
         return dream
 
