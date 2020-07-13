@@ -111,8 +111,8 @@ tsVector v = unsafeSqlFunction "to_tsvector" v
     * OR: logical or will be converted to the | operator.
     * -: the logical not operator, converted to the the ! operator.
 -}
-tsQuery :: E.SqlExpr (E.Value Text) -> E.SqlExpr (E.Value Text)
-tsQuery q = unsafeSqlFunction "websearch_to_tsquery" q
+webTsQuery :: E.SqlExpr (E.Value Text) -> E.SqlExpr (E.Value Text)
+webTsQuery q = unsafeSqlFunction "websearch_to_tsquery" q
 
 -- from:
 -- https://github.com/bitemyapp/esqueleto/pull/119/files
@@ -218,7 +218,7 @@ filteredDreams DreamFilters{..} userConditions = do
                 E.where_
                     $ (tsVector $ dream E.^. DreamTitle E.++. (E.val " ") E.++. dream E.^. DreamDescription)
                     @@.
-                    (tsQuery $ E.val kw)
+                    (webTsQuery $ E.val kw)
             )
             filterKeyword
         -- TODO: do we want to store the user's _current_ location _in addition_ to their birthplace?
