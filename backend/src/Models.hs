@@ -95,31 +95,6 @@ runDB query = do
 
 -- | Queries
 
-userDreams
-    :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
-    => Key UserAccount
-    -> Bool
-    -> m [Entity Dream]
-userDreams userId isOwner = do
-    entries <- runDB . E.select . E.from $ \dream -> do
-        if isOwner then
-            E.where_
-                (     dream
-                E.^.  DreamUserId
-                E.==. (E.val userId)
-                )
-        else
-           E.where_
-                (     dream
-                E.^.  DreamUserId
-                E.==. (E.val userId)
-                E.&&. dream
-                E.^.  DreamIsPrivate
-                E.==. (E.val False)
-                )
-        return dream
-    return entries
-
 -- TODO: actually need a buncha more filters:
 -- for reference:
 -- https://gist.github.com/bitemyapp/89c5e0663bddc3b1c78f5e3fa33e7dc4#file-companiescount-hs-L163
@@ -157,15 +132,51 @@ instance ToSample DreamFilters where
                                         (Just 200)
                                         Nothing
 
+noDreamFilters :: DreamFilters
+noDreamFilters = DreamFilters
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
 
 filteredDreams
     :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
     => DreamFilters
+    -> (Maybe (Key UserAccount, Bool))
     -> m [Entity Dream]
-filteredDreams DreamFilters{..} = do
+filteredDreams DreamFilters{..} userConditions = do
     let maybeNoConditions = maybe (return ())
     runDB . E.select . E.from $ \(dream `E.InnerJoin` userAccount) -> do
         E.on (userAccount E.^. UserAccountId E.==. dream E.^. DreamUserId)
+        maybe
+            -- if no user conditions, simply look through public dreams
+            (E.where_ (dream E.^. DreamIsPrivate E.==. E.val False))
+            -- if there are, check if the given user is the owner!
+            (\(userId, isOwner) ->
+                if isOwner then
+                    E.where_
+                        (     dream
+                        E.^.  DreamUserId
+                        E.==. (E.val userId)
+                        )
+                else
+                    E.where_
+                        (     dream
+                        E.^.  DreamUserId
+                        E.==. (E.val userId)
+                        E.&&. dream
+                        E.^.  DreamIsPrivate
+                        E.==. (E.val False)
+                    )
+            )
+            userConditions
         -- fun with optional filters!
         -- inspired by: https://gist.github.com/bitemyapp/89c5e0663bddc3b1c78f5e3fa33e7dc4#file-companiescount-hs-L79
         maybeNoConditions (\l -> E.where_ (dream E.^. DreamIsLucid E.==. E.val l)) filterLucid
@@ -192,15 +203,22 @@ filteredDreams DreamFilters{..} = do
         maybeNoConditions (\g -> E.where_ (userAccount E.^. UserAccountGender E.==. E.val g)) filterGender
         maybeNoConditions (\before -> E.where_ (dream E.^. DreamDreamedAt E.<=. E.val before)) filterBefore
         maybeNoConditions (\after -> E.where_ (dream E.^. DreamDreamedAt  E.>=. E.val after)) filterAfter
-        -- only for public dreams!
-        E.where_ (dream E.^. DreamIsPrivate E.==. E.val False)
         E.limit $ maybe 100 id filterLimit
         E.offset $ maybe 0 id filterOffset -- TODO: use pages?
         E.orderBy [ E.desc (dream E.^. DreamDreamedAt) ] -- TODO: need an index?
         return dream
 
+userDreams
+    :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
+    => Key UserAccount
+    -> Bool
+    -> m [Entity Dream]
+userDreams u o = filteredDreams noDreamFilters $ Just (u, o)
+
+
 -- | Documentation helpers
 
+-- TODO: the day approaches where it's obvious we need an "application" version of UserAccount.
 sampleUser :: UserAccount
 sampleUser = UserAccount "nena@alpaca.com"
                          (PasswordHash "secureAlpacaPassword")
