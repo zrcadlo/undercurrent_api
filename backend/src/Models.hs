@@ -206,9 +206,9 @@ filteredDreams DreamFilters{..} userConditions = do
             userConditions
         -- fun with optional filters!
         -- inspired by: https://gist.github.com/bitemyapp/89c5e0663bddc3b1c78f5e3fa33e7dc4#file-companiescount-hs-L79
-        maybeNoConditions (\l -> E.where_ (dream E.^. DreamIsLucid E.==. E.val l)) filterLucid
-        maybeNoConditions (\n -> E.where_ (dream E.^. DreamIsLucid E.==. E.val n)) filterNightmare
-        maybeNoConditions (\r -> E.where_ (dream E.^. DreamIsLucid E.==. E.val r)) filterRecurring
+        maybeNoConditions (\l -> E.where_ (dream E.^. DreamIsLucid     E.==. E.val l)) filterLucid
+        maybeNoConditions (\n -> E.where_ (dream E.^. DreamIsNightmare E.==. E.val n)) filterNightmare
+        maybeNoConditions (\r -> E.where_ (dream E.^. DreamIsRecurring E.==. E.val r)) filterRecurring
         maybeNoConditions (\es -> E.where_ (E.just (dream E.^. DreamEmotions) E.@>. (E.jsonbVal es))) filterEmotions
         -- TODO: need an index!
         -- more info on full text queries:
