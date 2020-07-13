@@ -39,6 +39,7 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as E
 import           Database.Esqueleto.PostgreSQL.JSON
                                                 ( JSONB )
 import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
+import RIO.Text (intercalate, words)
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
@@ -97,16 +98,21 @@ runDB query = do
 
 -- | Custom operators and functions
 -- as per: https://github.com/bitemyapp/esqueleto/tree/4dbd5339adf99e1f045c0a02211a03c79032f9cf#unsafe-functions-operators-and-values
-tsVector :: E.SqlString s => E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s)
+tsVector :: E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s)
 tsVector v = unsafeSqlFunction "to_tsvector" v
 
-tsQuery :: E.SqlString s => E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s)
+-- TODO: `q` needs to try its best to be a valid query. We should catch that at the edges?
+-- e.g. if there's spaces in the string, replace with `&` (e.g. `fear cats` => `fear & cats`)
+tsQuery :: E.SqlExpr (E.Value Text) -> E.SqlExpr (E.Value Text)
 tsQuery q = unsafeSqlFunction "to_tsquery" q
+
+asQuery :: Text -> Text
+asQuery rawString = intercalate " & " $ RIO.Text.words rawString
 
 -- from:
 -- https://github.com/bitemyapp/esqueleto/pull/119/files
 
-(@@.) :: E.SqlString s => E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value Bool)
+(@@.) :: E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value Bool)
 (@@.) = unsafeSqlBinOp " @@ "
 
 -- | Queries
@@ -207,7 +213,7 @@ filteredDreams DreamFilters{..} userConditions = do
                 E.where_
                     $ (tsVector $ dream E.^. DreamTitle E.++. (E.val " ") E.++. dream E.^. DreamDescription)
                     @@.
-                    (tsQuery $ E.val kw)
+                    (tsQuery $ E.val $ asQuery kw)
             )
             filterKeyword
         -- TODO: do we want to store the user's _current_ location _in addition_ to their birthplace?
