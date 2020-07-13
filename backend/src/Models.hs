@@ -147,13 +147,13 @@ noDreamFilters = DreamFilters
     Nothing
 
 filteredDreams
-    :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
+    :: (MonadIO m)
     => DreamFilters
     -> (Maybe (Key UserAccount, Bool))
-    -> m [Entity Dream]
+    -> ReaderT SqlBackend m [Entity Dream]
 filteredDreams DreamFilters{..} userConditions = do
     let maybeNoConditions = maybe (return ())
-    runDB . E.select . E.from $ \(dream `E.InnerJoin` userAccount) -> do
+    E.select . E.from $ \(dream `E.InnerJoin` userAccount) -> do
         E.on (userAccount E.^. UserAccountId E.==. dream E.^. DreamUserId)
         maybe
             -- if no user conditions, simply look through public dreams
@@ -213,7 +213,7 @@ userDreams
     => Key UserAccount
     -> Bool
     -> m [Entity Dream]
-userDreams u o = filteredDreams noDreamFilters $ Just (u, o)
+userDreams u o = runDB $ filteredDreams noDreamFilters $ Just (u, o)
 
 
 -- | Documentation helpers
