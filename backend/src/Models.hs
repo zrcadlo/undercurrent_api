@@ -38,6 +38,7 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as E
 --import qualified Database.Esqueleto.PostgreSQL as E
 import           Database.Esqueleto.PostgreSQL.JSON
                                                 ( JSONB )
+import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
@@ -92,6 +93,21 @@ runDB
 runDB query = do
     pool <- view dbConnectionPoolL
     liftIO $ runSqlPool query pool
+
+
+-- | Custom operators and functions
+-- as per: https://github.com/bitemyapp/esqueleto/tree/4dbd5339adf99e1f045c0a02211a03c79032f9cf#unsafe-functions-operators-and-values
+tsVector :: E.SqlString s => E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s)
+tsVector v = unsafeSqlFunction "to_tsvector" v
+
+tsQuery :: E.SqlString s => E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s)
+tsQuery q = unsafeSqlFunction "to_tsquery" q
+
+-- from:
+-- https://github.com/bitemyapp/esqueleto/pull/119/files
+
+(@@.) :: E.SqlString s => E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value Bool)
+(@@.) = unsafeSqlBinOp " @@ "
 
 -- | Queries
 
@@ -183,18 +199,15 @@ filteredDreams DreamFilters{..} userConditions = do
         maybeNoConditions (\n -> E.where_ (dream E.^. DreamIsLucid E.==. E.val n)) filterNightmare
         maybeNoConditions (\r -> E.where_ (dream E.^. DreamIsLucid E.==. E.val r)) filterRecurring
         maybeNoConditions (\es -> E.where_ (E.just (dream E.^. DreamEmotions) E.@>. (E.jsonbVal es))) filterEmotions
-        -- TODO: maybe we want a full text search here?
+        -- TODO: need an index!
+        -- more info on full text queries:
+        -- https://www.postgresql.org/docs/current/textsearch-tables.html
         maybeNoConditions
             (\kw ->
                 E.where_
-                    $         dream
-                    E.^.      DreamTitle
-                    E.++.     (E.val " ")
-                    E.++.     dream
-                    E.^.      DreamDescription
-                    `E.ilike` (E.%)
-                    E.++.     (E.val kw)
-                    E.++.     (E.%)
+                    $ (tsVector $ dream E.^. DreamTitle E.++. (E.val " ") E.++. dream E.^. DreamDescription)
+                    @@.
+                    (tsQuery $ E.val kw)
             )
             filterKeyword
         -- TODO: do we want to store the user's _current_ location _in addition_ to their birthplace?
