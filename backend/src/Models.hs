@@ -39,7 +39,6 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as E
 import           Database.Esqueleto.PostgreSQL.JSON
                                                 ( JSONB )
 import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
-import RIO.Text (intercalate, words)
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
@@ -101,13 +100,19 @@ runDB query = do
 tsVector :: E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s)
 tsVector v = unsafeSqlFunction "to_tsvector" v
 
--- TODO: `q` needs to try its best to be a valid query. We should catch that at the edges?
--- e.g. if there's spaces in the string, replace with `&` (e.g. `fear cats` => `fear & cats`)
-tsQuery :: E.SqlExpr (E.Value Text) -> E.SqlExpr (E.Value Text)
-tsQuery q = unsafeSqlFunction "to_tsquery" q
+{-| Generate a standardize tsquery based on unsanitized input.
+    not using to_tsquery since innocent strings like `"fear the cat"`
+    would break it (it expects them to be e.g. `"fear & cat"`)
+    fortunately, `websearch_to_tsquery` does all that for us:
+    https://www.postgresql.org/docs/current/textsearch-controls.html#TEXTSEARCH-PARSING-QUERIES
 
-asQuery :: Text -> Text
-asQuery rawString = intercalate " & " $ RIO.Text.words rawString
+    * unquoted text: text not inside quote marks will be converted to terms separated by & operators, as if processed by plainto_tsquery.
+    * "quoted text": text inside quote marks will be converted to terms separated by <-> operators, as if processed by phraseto_tsquery.
+    * OR: logical or will be converted to the | operator.
+    * -: the logical not operator, converted to the the ! operator.
+-}
+tsQuery :: E.SqlExpr (E.Value Text) -> E.SqlExpr (E.Value Text)
+tsQuery q = unsafeSqlFunction "websearch_to_tsquery" q
 
 -- from:
 -- https://github.com/bitemyapp/esqueleto/pull/119/files
@@ -213,7 +218,7 @@ filteredDreams DreamFilters{..} userConditions = do
                 E.where_
                     $ (tsVector $ dream E.^. DreamTitle E.++. (E.val " ") E.++. dream E.^. DreamDescription)
                     @@.
-                    (tsQuery $ E.val $ asQuery kw)
+                    (tsQuery $ E.val kw)
             )
             filterKeyword
         -- TODO: do we want to store the user's _current_ location _in addition_ to their birthplace?
