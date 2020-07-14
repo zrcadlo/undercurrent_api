@@ -221,17 +221,17 @@ filteredDreams DreamFilters{..} userConditions = do
                     (webTsQuery $ E.val kw)
             )
             filterKeyword
-        -- TODO: do we want to store the user's _current_ location _in addition_ to their birthplace?
-        --       if so, that's probably what we _really_ want to filter in the next line :thinking_emoji:
+        -- TODO: remove "birthplace", use userLocation. Also, introduce that. 
         maybeNoConditions (\b -> E.where_ (userAccount E.^. UserAccountBirthplace E.==. (E.just $ E.val b))) filterBirthplace
+        -- TODO: make Gender optional!
         maybeNoConditions (\g -> E.where_ (userAccount E.^. UserAccountGender E.==. E.val g)) filterGender
         maybeNoConditions (\before -> E.where_ (dream E.^. DreamDreamedAt E.<=. E.val before)) filterBefore
         maybeNoConditions (\after -> E.where_ (dream E.^. DreamDreamedAt  E.>=. E.val after)) filterAfter
         -- keyset pagination
-        maybeNoConditions (\lastSeen -> E.where_(dream E.^. DreamId E.>. E.val lastSeen)) filterLastSeenId
+        maybeNoConditions (\lastSeen -> E.where_(dream E.^. DreamId E.<. E.val lastSeen)) filterLastSeenId
         -- default page size is 200, max is 1000.
         E.limit $ maybe 200 (\l-> if l > 1000 then 1000 else l) filterLimit
-        E.orderBy [ E.desc (dream E.^. DreamDreamedAt) ] -- TODO: need an index?
+        E.orderBy [ E.desc (dream E.^. DreamId) ]
         return dream
 
 userDreams
