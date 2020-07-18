@@ -202,6 +202,17 @@ spec =
                     `shouldRespondWith` [json|[
                         {"nightmare":false,
                         "lucid":false,
+                        "private":true,
+                        "emotions":["joy"],
+                        "recurring":true,
+                        "date":"2017-02-14T00:00:00Z",
+                        "starred":false,
+                        "dreamer_id":1,
+                        "dream_id":2,
+                        "title":"Nena's secret dream",
+                        "description":"Nena dreams"},
+                        {"nightmare":false,
+                        "lucid":false,
                         "private":false,
                         "emotions":["joy"],
                         "recurring":true,
@@ -211,18 +222,7 @@ spec =
                         "dream_id":1,
                         "title":"Nena's dream",
                         "description":"Nena dreams"
-                        },
-                        {"nightmare":false,
-                        "lucid":false,
-                        "private":true,
-                        "emotions":["joy"],
-                        "recurring":true,
-                        "date":"2017-02-14T00:00:00Z",
-                        "starred":false,
-                        "dreamer_id":1,
-                        "dream_id":2,
-                        "title":"Nena's secret dream",
-                        "description":"Nena dreams"}]|] {matchStatus = 200}
+                        }]|] {matchStatus = 200}
 
         describe "POST /api/user/dreams" $ do
             it "responds with 400 if unknown emotions are used" $ do
@@ -292,6 +292,17 @@ spec =
                     `shouldRespondWith` [json|[
                         {"nightmare":false,
                         "lucid":false,
+                        "private":true,
+                        "emotions":["joy"],
+                        "recurring":true,
+                        "date":"2017-02-14T00:00:00Z",
+                        "starred":false,
+                        "dreamer_id":1,
+                        "dream_id":2,
+                        "title":"Nena's secret dream",
+                        "description":"Nena dreams"},
+                        {"nightmare":false,
+                        "lucid":false,
                         "private":false,
                         "emotions":["joy"],
                         "recurring":true,
@@ -301,18 +312,7 @@ spec =
                         "dream_id":1,
                         "title":"Nena's dream",
                         "description":"Nena dreams"
-                        },
-                        {"nightmare":false,
-                        "lucid":false,
-                        "private":true,
-                        "emotions":["joy"],
-                        "recurring":true,
-                        "date":"2017-02-14T00:00:00Z",
-                        "starred":false,
-                        "dreamer_id":1,
-                        "dream_id":2,
-                        "title":"Nena's secret dream",
-                        "description":"Nena dreams"}]|] {matchStatus = 200}
+                        }]|] {matchStatus = 200}
 
             it "responds with public dreams when the current user is someone else" $ do
                 authenticatedGet "/api/users/1/dreams" charlieUserToken ""
@@ -358,4 +358,3 @@ spec =
             authenticatedPost = authenticatedRequest methodPost
             authenticatedPut  = authenticatedRequest methodPut
             authenticatedDelete = authenticatedRequest methodDelete
-
