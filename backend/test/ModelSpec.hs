@@ -116,13 +116,14 @@ spec = do
                 insert_ $ pacoDream "Should never show up" "cuz it's private!" ["joy", "anger", "fear"] zeroTime $ Just (False, True, True, True, True)
 
                 let pacoFilteredDreams fs = filteredDreams fs $ Just (paco, False)
+                    pacosSecrets = noDreamFilters {filterLucid = Just False, filterRecurring = Just True, filterEmotions = Just $ map EmotionLabel ["anger"]}
 
-                lucidDreams <- pacoFilteredDreams onlyLucid
-                nightmares  <- pacoFilteredDreams onlyNightmares
-                recurring   <- pacoFilteredDreams onlyRecurring
-                gladMad     <- pacoFilteredDreams onlyExtremes
-                private     <- filteredDreams onlySecrets $ Just (paco, True)
-                lucidCat    <- pacoFilteredDreams onlyKeywords
+                lucidDreams <- pacoFilteredDreams $ noDreamFilters {filterLucid=Just True}
+                nightmares  <- pacoFilteredDreams $ noDreamFilters {filterNightmare=Just True}
+                recurring   <- pacoFilteredDreams $ noDreamFilters {filterRecurring=Just True}
+                gladMad     <- pacoFilteredDreams $ noDreamFilters {filterEmotions = Just $ map EmotionLabel ["joy", "anger"]}
+                private     <- filteredDreams pacosSecrets $ Just (paco, True)
+                lucidCat    <- pacoFilteredDreams $ noDreamFilters {filterKeyword = Just "lucid cat"}
 
                 liftIO $ dreamTitlesFor lucidDreams `shouldBe` ["Lucid"]
                 liftIO $ dreamTitlesFor nightmares `shouldBe` ["Nightmare"]
@@ -156,171 +157,10 @@ spec = do
 
 
 limitTo :: Int64 -> DreamFilters
-limitTo l =
-     DreamFilters
-         { filterLucid = Nothing,
-           filterNightmare = Nothing,
-           filterRecurring = Nothing,
-           filterEmotions =  Nothing,
-           filterKeyword = Nothing,
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore = Nothing,
-           filterAfter = Nothing,
-           filterLimit = Just l,
-           filterLastSeenId = Nothing
-         }
+limitTo l = noDreamFilters{filterLimit = Just l}
 
 filterDate :: Maybe UTCTime -> Maybe UTCTime -> DreamFilters
-filterDate before Nothing =
-     DreamFilters
-         { filterLucid = Nothing,
-           filterNightmare = Nothing,
-           filterRecurring = Nothing,
-           filterEmotions =  Nothing,
-           filterKeyword = Nothing,
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore = before,
-           filterAfter = Nothing,
-           filterLimit = Nothing,
-           filterLastSeenId = Nothing
-         }
-
-filterDate Nothing after =
-     DreamFilters
-         { filterLucid = Nothing,
-           filterNightmare = Nothing,
-           filterRecurring = Nothing,
-           filterEmotions =  Nothing,
-           filterKeyword = Nothing,
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore = Nothing,
-           filterAfter =  after,
-           filterLimit = Nothing,
-           filterLastSeenId = Nothing
-         }
-
-filterDate before after =
-     DreamFilters
-         { filterLucid = Nothing,
-           filterNightmare = Nothing,
-           filterRecurring = Nothing,
-           filterEmotions =  Nothing,
-           filterKeyword = Nothing,
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore =  before,
-           filterAfter =  after,
-           filterLimit = Nothing,
-           filterLastSeenId = Nothing
-         }
-
-filterDate Nothing Nothing =
-     DreamFilters
-         { filterLucid = Nothing,
-           filterNightmare = Nothing,
-           filterRecurring = Nothing,
-           filterEmotions =  Nothing,
-           filterKeyword = Nothing,
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore = Nothing,
-           filterAfter = Nothing,
-           filterLimit = Nothing,
-           filterLastSeenId = Nothing
-         }         
-
--- buncha filters
-onlyLucid :: DreamFilters
-onlyLucid = 
-     DreamFilters
-         { filterLucid = Just True,
-           filterNightmare = Nothing,
-           filterRecurring = Nothing,
-           filterEmotions =  Nothing,
-           filterKeyword = Nothing,
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore = Nothing,
-           filterAfter = Nothing,
-           filterLimit = Nothing,
-           filterLastSeenId = Nothing
-         }
-onlyNightmares :: DreamFilters
-onlyNightmares = 
-     DreamFilters
-         { filterLucid = Nothing,
-           filterNightmare = Just True,
-           filterRecurring = Nothing,
-           filterEmotions =  Nothing,
-           filterKeyword = Nothing,
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore = Nothing,
-           filterAfter = Nothing,
-           filterLimit = Nothing,
-           filterLastSeenId = Nothing
-         }   
-onlyRecurring :: DreamFilters
-onlyRecurring = 
-     DreamFilters
-         { filterLucid = Nothing,
-           filterNightmare = Nothing,
-           filterRecurring = Just True,
-           filterEmotions =  Nothing,
-           filterKeyword = Nothing,
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore = Nothing,
-           filterAfter = Nothing,
-           filterLimit = Nothing,
-           filterLastSeenId = Nothing
-         }
-onlyExtremes :: DreamFilters
-onlyExtremes =
-     DreamFilters
-         { filterLucid = Nothing,
-           filterNightmare = Nothing,
-           filterRecurring = Nothing,
-           filterEmotions = Just $ map EmotionLabel ["joy", "anger"],
-           filterKeyword = Nothing,
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore = Nothing,
-           filterAfter = Nothing,
-           filterLimit = Nothing,
-           filterLastSeenId = Nothing
-         }
-onlySecrets :: DreamFilters
-onlySecrets = 
-    DreamFilters
-         { filterLucid = Just False,
-           filterNightmare = Nothing,
-           filterRecurring = Just True,
-           filterEmotions = Just $ map EmotionLabel ["anger"],
-           filterKeyword = Nothing,
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore = Nothing,
-           filterAfter = Nothing,
-           filterLimit = Nothing,
-           filterLastSeenId = Nothing
-         }
-
-onlyKeywords :: DreamFilters
-onlyKeywords = 
-    DreamFilters
-         { filterLucid = Nothing,
-           filterNightmare = Nothing,
-           filterRecurring = Nothing,
-           filterEmotions = Nothing,
-           filterKeyword = Just "lucid cat",
-           filterBirthplace = Nothing,
-           filterGender = Nothing,
-           filterBefore = Nothing,
-           filterAfter = Nothing,
-           filterLimit = Nothing,
-           filterLastSeenId = Nothing
-         }
+filterDate before Nothing = noDreamFilters {filterBefore = before}
+filterDate Nothing after = noDreamFilters {filterAfter = after}
+filterDate before after = noDreamFilters {filterBefore=before, filterAfter=after}
+filterDate Nothing Nothing = noDreamFilters
