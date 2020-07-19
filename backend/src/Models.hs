@@ -19,7 +19,7 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import           RIO.Time                       ( UTCTime )
-import           Database.Persist.Postgresql    ( Key
+import           Database.Persist.Postgresql    (addMigration,  Key
                                                 , Entity(..)
                                                 , SqlPersistT
                                                 , rawExecute
@@ -39,6 +39,7 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as E
 import           Database.Esqueleto.PostgreSQL.JSON
                                                 ( JSONB )
 import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
+import qualified Migrations as M
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
@@ -84,8 +85,17 @@ instance ToJSON UserAccount where
         , "birthplace" .= userAccountBirthplace e
         ]
 
+-- all migrations added with `addMigration` should be idempotent, if not, mark them as unsafe
+-- by flipping the first parameter to `False`.
+-- See:
+-- https://github.com/yesodweb/persistent/issues/919#issuecomment-504693703
+-- https://hackage.haskell.org/package/persistent-2.10.0/docs/Database-Persist-Sql.html#g:1
 runMigrations :: ReaderT SqlBackend IO ()
-runMigrations = runMigration migrateAll
+runMigrations = runMigration $ do 
+    migrateAll
+    addMigration True M.addTimestampFunctions
+    addMigration True M.addUserTriggers
+    addMigration True M.addDreamTriggers
 
 runDB
     :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
