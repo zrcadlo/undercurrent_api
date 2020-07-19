@@ -8,10 +8,12 @@ import Import
 import Test.Hspec
 import Models
 import Control.Monad.Logger (MonadLogger, NoLoggingT(runNoLoggingT))
-import Database.Persist.Postgresql (toSqlKey, getBy, Entity(..), insert, transactionUndo, runMigration, SqlBackend, runSqlConn, withPostgresqlConn, ConnectionString)
+import Database.Persist.Postgresql (insert_, toSqlKey, getBy, Entity(..), insert, transactionUndo, runMigration, SqlBackend, runSqlConn, withPostgresqlConn, ConnectionString)
 import Data.Password.Argon2 (hashPassword)
 import RIO.Time (fromGregorian, UTCTime(..))
 import Util (zeroTime)
+import System.IO.Unsafe (unsafePerformIO)
+import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
 
 
 testDB :: ConnectionString
@@ -20,25 +22,207 @@ testDB = "postgresql://localhost/undercurrent_test?user=luis"
 withDBConn :: (MonadIO m, MonadUnliftIO m) => ReaderT SqlBackend (NoLoggingT m) a -> m a
 withDBConn = runNoLoggingT . (withPostgresqlConn testDB) . runSqlConn
 
-prepareDB :: IO ()
-prepareDB = withDBConn $ do
+prepareDB :: ReaderT SqlBackend (NoLoggingT IO) ()
+prepareDB = do
     _ <- runMigration migrateAll
     dropModels
-    return ()
 
-rollback :: IO ()
-rollback = withDBConn $ do
-    transactionUndo
-    return ()
+-- NOTE(luis) yeah, we're doing all (model) migrations, running the given spec, and then truncating all tables again
+-- it's both clean and horrible at the same time.
+-- Inspired by these psychos:
+-- https://github.com/bitemyapp/esqueleto/blob/4dbd5339adf99e1f045c0a02211a03c79032f9cf/test/MySQL/Test.hs
+run :: ReaderT SqlBackend (NoLoggingT IO) () -> IO ()
+run f =  withDBConn $ prepareDB >> f >> dropModels
 
-run :: ReaderT SqlBackend (NoLoggingT IO) a -> IO ()
-run f =  prepareDB >> (withDBConn $ f) >> rollback
+mkUser :: Text -> Text -> Gender -> UserAccount
+mkUser name email gender = 
+    UserAccount
+        email
+        (unsafePerformIO $ hashPassword "defaultPassword") 
+        name
+        gender 
+        (Just zeroTime)
+        Nothing
+        (Just zeroTime)
+        (Just zeroTime)
 
+--mkDream :: Int -> 
+mkDream :: Key UserAccount -> Text -> Text -> [Text] -> UTCTime -> Maybe (Bool, Bool, Bool, Bool, Bool) -> Dream
+mkDream userId t d es at Nothing =
+    Dream
+        userId
+        t
+        d
+        False
+        False
+        False
+        False
+        False
+        (JSONB $ map EmotionLabel es)
+        at
+        zeroTime
+        zeroTime
+
+mkDream userId t d es at (Just (lucid, nightmare, recurring, private, starred)) =
+    Dream
+        userId
+        t
+        d
+        lucid
+        nightmare
+        recurring
+        private
+        starred
+        (JSONB $ map EmotionLabel es)
+        at
+        zeroTime
+        zeroTime
+
+dreamTitlesFor :: [Entity Dream] -> [Text]
+dreamTitlesFor = map (\(Entity _ d) -> dreamTitle d)
 
 spec :: Spec
 spec = do
     describe "filteredDreams" $ do
-        it "works" $ do
+        it "finds dreams by user filters, returned in descending order of creation" $ do
             run $ do
-                nenaDreams <- filteredDreams noDreamFilters $ Just (toSqlKey 1, False)
-                liftIO $ nenaDreams `shouldBe` []
+                nena <- insert $ mkUser "nena@alpaca.net" "Nena" Female
+                charlie <- insert $ mkUser "charlie@alpaca.net" "Charlie" NonBinary
+ 
+                nenasDreams <- forM_ ["Dream 1", "Dream 2"] $ \title -> do
+                    let dream = mkDream nena title "description" ["joy"] zeroTime Nothing
+                    insert_ dream
+                privateDreams <- forM_ ["Dream 3", "Dream 4"] $ \title -> do
+                    let privateDream = mkDream nena title "description" ["anger"] zeroTime $ Just (False, False, False, True, False)
+                    insert_ privateDream
+                charlieDreams <- forM_ ["Dream 5"] $ \title -> do
+                    insert_ $ mkDream charlie title "description" ["joy"] zeroTime Nothing
+
+                nenaDreams <- filteredDreams noDreamFilters $ Just (nena, False)
+                secretDreams <- filteredDreams noDreamFilters $ Just (nena, True)
+                publicDreams <- filteredDreams noDreamFilters Nothing
+
+                liftIO $ dreamTitlesFor nenaDreams   `shouldBe` ["Dream 2", "Dream 1"]
+                liftIO $ dreamTitlesFor secretDreams `shouldBe` ["Dream 4", "Dream 3", "Dream 2", "Dream 1"]
+                liftIO $ dreamTitlesFor publicDreams `shouldBe` ["Dream 5", "Dream 2" , "Dream 1"]
+
+        it "applies the easy filters (booleans, emotions, full text)" $ do
+            run $ do
+                paco <- insert $ mkUser "paco@alpaca.net" "Paco" Male
+                let pacoDream = mkDream paco
+                insert_ $ pacoDream "Lucid" "a lucid one with cats" ["joy", "anger", "sadness"] zeroTime $ Just (True, False, False, False, False)
+                insert_ $ pacoDream "Nightmare" "huy, lucidly cats spoke!" ["fear", "sadness"] zeroTime $ Just (False, True, False, False, False)
+                insert_ $ pacoDream "Recurring" "again" ["anger", "confused", "joy"] zeroTime $ Just (False, False, True, False, False)
+                insert_ $ pacoDream "Should never show up" "cuz it's private!" ["joy", "anger", "fear"] zeroTime $ Just (False, True, True, True, True)
+
+                let pacoFilteredDreams fs = filteredDreams fs $ Just (paco, False)
+
+                lucidDreams <- pacoFilteredDreams onlyLucid
+                nightmares  <- pacoFilteredDreams onlyNightmares
+                recurring   <- pacoFilteredDreams onlyRecurring
+                gladMad     <- pacoFilteredDreams onlyExtremes
+                private     <- filteredDreams onlySecrets $ Just (paco, True)
+                lucidCat    <- pacoFilteredDreams onlyKeywords
+
+                liftIO $ dreamTitlesFor lucidDreams `shouldBe` ["Lucid"]
+                liftIO $ dreamTitlesFor nightmares `shouldBe` ["Nightmare"]
+                liftIO $ dreamTitlesFor recurring `shouldBe` ["Recurring"]
+                liftIO $ dreamTitlesFor gladMad `shouldBe` ["Recurring", "Lucid"]
+                liftIO $ dreamTitlesFor private `shouldBe` ["Should never show up", "Recurring"]
+                liftIO $ dreamTitlesFor lucidCat `shouldBe` ["Nightmare", "Lucid"]
+
+        -- TODO: user filters (gender, zodiac sign(?), location)
+        -- TODO: ranged filters (dreamedAt, pagination)
+
+-- buncha filters
+onlyLucid :: DreamFilters
+onlyLucid = 
+     DreamFilters
+         { filterLucid = Just True,
+           filterNightmare = Nothing,
+           filterRecurring = Nothing,
+           filterEmotions =  Nothing,
+           filterKeyword = Nothing,
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore = Nothing,
+           filterAfter = Nothing,
+           filterLimit = Nothing,
+           filterLastSeenId = Nothing
+         }
+onlyNightmares :: DreamFilters
+onlyNightmares = 
+     DreamFilters
+         { filterLucid = Nothing,
+           filterNightmare = Just True,
+           filterRecurring = Nothing,
+           filterEmotions =  Nothing,
+           filterKeyword = Nothing,
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore = Nothing,
+           filterAfter = Nothing,
+           filterLimit = Nothing,
+           filterLastSeenId = Nothing
+         }   
+onlyRecurring :: DreamFilters
+onlyRecurring = 
+     DreamFilters
+         { filterLucid = Nothing,
+           filterNightmare = Nothing,
+           filterRecurring = Just True,
+           filterEmotions =  Nothing,
+           filterKeyword = Nothing,
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore = Nothing,
+           filterAfter = Nothing,
+           filterLimit = Nothing,
+           filterLastSeenId = Nothing
+         }
+onlyExtremes :: DreamFilters
+onlyExtremes =
+     DreamFilters
+         { filterLucid = Nothing,
+           filterNightmare = Nothing,
+           filterRecurring = Nothing,
+           filterEmotions = Just $ map EmotionLabel ["joy", "anger"],
+           filterKeyword = Nothing,
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore = Nothing,
+           filterAfter = Nothing,
+           filterLimit = Nothing,
+           filterLastSeenId = Nothing
+         }
+onlySecrets :: DreamFilters
+onlySecrets = 
+    DreamFilters
+         { filterLucid = Just False,
+           filterNightmare = Nothing,
+           filterRecurring = Just True,
+           filterEmotions = Just $ map EmotionLabel ["anger"],
+           filterKeyword = Nothing,
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore = Nothing,
+           filterAfter = Nothing,
+           filterLimit = Nothing,
+           filterLastSeenId = Nothing
+         }
+
+onlyKeywords :: DreamFilters
+onlyKeywords = 
+    DreamFilters
+         { filterLucid = Nothing,
+           filterNightmare = Nothing,
+           filterRecurring = Nothing,
+           filterEmotions = Nothing,
+           filterKeyword = Just "lucid cat",
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore = Nothing,
+           filterAfter = Nothing,
+           filterLimit = Nothing,
+           filterLastSeenId = Nothing
+         }
