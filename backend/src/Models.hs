@@ -67,6 +67,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
         dreamedAt UTCTime default=now()
         createdAt UTCTime default=now()
         updatedAt UTCTime default=now()
+        deriving Eq Show
 |]
 
 -- manually rolling out the JSON instance for UserAccount to avoid exposing the password.
