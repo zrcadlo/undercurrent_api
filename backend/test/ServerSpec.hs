@@ -193,158 +193,158 @@ spec =
                     }|]
                     `shouldRespondWith` 201
 
-            describe "GET /api/user/dreams" $ do
-                it "responds with 401 if no user is signed in" $ do
-                    get "/api/user/dreams" `shouldRespondWith` 401
-                
-                it "responds with the current user's dreams, private and public, when authenticated" $ do
-                    authenticatedGet "/api/user/dreams" currentUserToken ""
-                        `shouldRespondWith` [json|[
-                            {"nightmare":false,
-                            "lucid":false,
-                            "private":false,
-                            "emotions":["joy"],
-                            "recurring":true,
-                            "date":"2017-02-14T00:00:00Z",
-                            "starred":false,
-                            "dreamer_id":1,
-                            "dream_id":1,
-                            "title":"Nena's dream",
-                            "description":"Nena dreams"
-                            },
-                            {"nightmare":false,
-                            "lucid":false,
-                            "private":true,
-                            "emotions":["joy"],
-                            "recurring":true,
-                            "date":"2017-02-14T00:00:00Z",
-                            "starred":false,
-                            "dreamer_id":1,
-                            "dream_id":2,
-                            "title":"Nena's secret dream",
-                            "description":"Nena dreams"}]|] {matchStatus = 200}
+        describe "GET /api/user/dreams" $ do
+            it "responds with 401 if no user is signed in" $ do
+                get "/api/user/dreams" `shouldRespondWith` 401
+            
+            it "responds with the current user's dreams, private and public, when authenticated" $ do
+                authenticatedGet "/api/user/dreams" currentUserToken ""
+                    `shouldRespondWith` [json|[
+                        {"nightmare":false,
+                        "lucid":false,
+                        "private":true,
+                        "emotions":["joy"],
+                        "recurring":true,
+                        "date":"2017-02-14T00:00:00Z",
+                        "starred":false,
+                        "dreamer_id":1,
+                        "dream_id":2,
+                        "title":"Nena's secret dream",
+                        "description":"Nena dreams"},
+                        {"nightmare":false,
+                        "lucid":false,
+                        "private":false,
+                        "emotions":["joy"],
+                        "recurring":true,
+                        "date":"2017-02-14T00:00:00Z",
+                        "starred":false,
+                        "dreamer_id":1,
+                        "dream_id":1,
+                        "title":"Nena's dream",
+                        "description":"Nena dreams"
+                        }]|] {matchStatus = 200}
 
-            describe "POST /api/user/dreams" $ do
-                it "responds with 400 if unknown emotions are used" $ do
-                    authenticatedPost "/api/user/dreams" pacoUserToken
-                        [json|{
-                            "nightmare":false,
-                            "lucid":false,
-                            "private":false,
-                            "emotions":["afeared!"],
-                            "recurring":true,
-                            "date":"2020-07-07T00:00:00Z",
-                            "starred":true,
-                            "title":"I dream of Alpacas",
-                            "description":"Some alpacas were wearing sunglasses"}|]
-                        `shouldRespondWith` 400
+        describe "POST /api/user/dreams" $ do
+            it "responds with 400 if unknown emotions are used" $ do
+                authenticatedPost "/api/user/dreams" pacoUserToken
+                    [json|{
+                        "nightmare":false,
+                        "lucid":false,
+                        "private":false,
+                        "emotions":["afeared!"],
+                        "recurring":true,
+                        "date":"2020-07-07T00:00:00Z",
+                        "starred":true,
+                        "title":"I dream of Alpacas",
+                        "description":"Some alpacas were wearing sunglasses"}|]
+                    `shouldRespondWith` 400
 
-                it "responds with 201 if the dream was correctly created" $ do
-                    -- TODO: maybe test for the actual response too?
-                    authenticatedPost "/api/user/dreams" pacoUserToken
-                        [json|{
-                            "nightmare":false,
-                            "lucid":false,
-                            "private":false,
-                            "emotions":["joy", "intimidated"],
-                            "recurring":true,
-                            "date":"2020-07-07T00:00:00Z",
-                            "starred":true,
-                            "title":"I dream of Alpacas",
-                            "description":"Some alpacas were wearing sunglasses"}|]
-                        `shouldRespondWith` 201
+            it "responds with 201 if the dream was correctly created" $ do
+                -- TODO: maybe test for the actual response too?
+                authenticatedPost "/api/user/dreams" pacoUserToken
+                    [json|{
+                        "nightmare":false,
+                        "lucid":false,
+                        "private":false,
+                        "emotions":["joy", "intimidated"],
+                        "recurring":true,
+                        "date":"2020-07-07T00:00:00Z",
+                        "starred":true,
+                        "title":"I dream of Alpacas",
+                        "description":"Some alpacas were wearing sunglasses"}|]
+                    `shouldRespondWith` 201
 
-            describe "PUT /api/user/dreams/:dreamId" $ do
-                it "responds with 401 if not authenticated" $ do
-                    request methodPut "/api/user/dreams/4" [("Content-Type", "application/json")]
-                        [json|{nightmare: true}|]
-                        `shouldRespondWith` 401
-                it "responds with 403 if this is someone else's dream" $ do
-                    authenticatedPut "/api/user/dreams/4" pacoUserToken
-                        [json|{nightmare: true}|]
-                        `shouldRespondWith` 403
-                it "responds with 404 if this isn't a real dream" $ do
-                    authenticatedPut "/api/user/dreams/666" charlieUserToken
-                        [json|{recurring: true}|]
-                        `shouldRespondWith` 404
-                it "responds with 204 if this is your dream" $ do
-                    authenticatedPut "/api/user/dreams/4" charlieUserToken
-                        [json|{nightmare: true, emotions: ["vigilant", "worry"]}|]
-                        `shouldRespondWith` 204
+        describe "PUT /api/user/dreams/:dreamId" $ do
+            it "responds with 401 if not authenticated" $ do
+                request methodPut "/api/user/dreams/4" [("Content-Type", "application/json")]
+                    [json|{nightmare: true}|]
+                    `shouldRespondWith` 401
+            it "responds with 403 if this is someone else's dream" $ do
+                authenticatedPut "/api/user/dreams/4" pacoUserToken
+                    [json|{nightmare: true}|]
+                    `shouldRespondWith` 403
+            it "responds with 404 if this isn't a real dream" $ do
+                authenticatedPut "/api/user/dreams/666" charlieUserToken
+                    [json|{recurring: true}|]
+                    `shouldRespondWith` 404
+            it "responds with 204 if this is your dream" $ do
+                authenticatedPut "/api/user/dreams/4" charlieUserToken
+                    [json|{nightmare: true, emotions: ["vigilant", "worry"]}|]
+                    `shouldRespondWith` 204
 
-            describe "DELETE /api/user/dreams/:dreamId" $ do
-                it "responds with 401 if not authenticated" $ do
-                    request methodDelete "/api/user/dreams/4" [("Content-Type", "application/json")] ""
-                        `shouldRespondWith` 401
-                it "responds with 403 if this is someone else's dream" $ do
-                    authenticatedDelete "/api/user/dreams/5" charlieUserToken ""
-                        `shouldRespondWith` 403
-                it "responds with 410 if this isn't a real dream" $ do
-                    authenticatedDelete "/api/user/dreams/666" charlieUserToken ""
-                        `shouldRespondWith` 410
-                it "responds with 204 if this is your dream" $ do
-                    authenticatedDelete "/api/user/dreams/5" pacoUserToken ""
-                        `shouldRespondWith` 204
+        describe "DELETE /api/user/dreams/:dreamId" $ do
+            it "responds with 401 if not authenticated" $ do
+                request methodDelete "/api/user/dreams/4" [("Content-Type", "application/json")] ""
+                    `shouldRespondWith` 401
+            it "responds with 403 if this is someone else's dream" $ do
+                authenticatedDelete "/api/user/dreams/5" charlieUserToken ""
+                    `shouldRespondWith` 403
+            it "responds with 410 if this isn't a real dream" $ do
+                authenticatedDelete "/api/user/dreams/666" charlieUserToken ""
+                    `shouldRespondWith` 410
+            it "responds with 204 if this is your dream" $ do
+                authenticatedDelete "/api/user/dreams/5" pacoUserToken ""
+                    `shouldRespondWith` 204
 
-            describe "GET /api/users/:userId/dreams" $ do
-                it "responds with all dreams, public and private, if the current user is the owner" $ do
-                    authenticatedGet "/api/users/1/dreams" currentUserToken ""
-                        `shouldRespondWith` [json|[
-                            {"nightmare":false,
-                            "lucid":false,
-                            "private":false,
-                            "emotions":["joy"],
-                            "recurring":true,
-                            "date":"2017-02-14T00:00:00Z",
-                            "starred":false,
-                            "dreamer_id":1,
-                            "dream_id":1,
-                            "title":"Nena's dream",
-                            "description":"Nena dreams"
-                            },
-                            {"nightmare":false,
-                            "lucid":false,
-                            "private":true,
-                            "emotions":["joy"],
-                            "recurring":true,
-                            "date":"2017-02-14T00:00:00Z",
-                            "starred":false,
-                            "dreamer_id":1,
-                            "dream_id":2,
-                            "title":"Nena's secret dream",
-                            "description":"Nena dreams"}]|] {matchStatus = 200}
+        describe "GET /api/users/:userId/dreams" $ do
+            it "responds with all dreams, public and private, if the current user is the owner" $ do
+                authenticatedGet "/api/users/1/dreams" currentUserToken ""
+                    `shouldRespondWith` [json|[
+                        {"nightmare":false,
+                        "lucid":false,
+                        "private":true,
+                        "emotions":["joy"],
+                        "recurring":true,
+                        "date":"2017-02-14T00:00:00Z",
+                        "starred":false,
+                        "dreamer_id":1,
+                        "dream_id":2,
+                        "title":"Nena's secret dream",
+                        "description":"Nena dreams"},
+                        {"nightmare":false,
+                        "lucid":false,
+                        "private":false,
+                        "emotions":["joy"],
+                        "recurring":true,
+                        "date":"2017-02-14T00:00:00Z",
+                        "starred":false,
+                        "dreamer_id":1,
+                        "dream_id":1,
+                        "title":"Nena's dream",
+                        "description":"Nena dreams"
+                        }]|] {matchStatus = 200}
 
-                it "responds with public dreams when the current user is someone else" $ do
-                    authenticatedGet "/api/users/1/dreams" charlieUserToken ""
-                        `shouldRespondWith` [json|[
-                            {"nightmare":false,
-                            "lucid":false,
-                            "private":false,
-                            "emotions":["joy"],
-                            "recurring":true,
-                            "date":"2017-02-14T00:00:00Z",
-                            "starred":false,
-                            "dreamer_id":1,
-                            "dream_id":1,
-                            "title":"Nena's dream",
-                            "description":"Nena dreams"
-                            }]|] {matchStatus = 200}
+            it "responds with public dreams when the current user is someone else" $ do
+                authenticatedGet "/api/users/1/dreams" charlieUserToken ""
+                    `shouldRespondWith` [json|[
+                        {"nightmare":false,
+                        "lucid":false,
+                        "private":false,
+                        "emotions":["joy"],
+                        "recurring":true,
+                        "date":"2017-02-14T00:00:00Z",
+                        "starred":false,
+                        "dreamer_id":1,
+                        "dream_id":1,
+                        "title":"Nena's dream",
+                        "description":"Nena dreams"
+                        }]|] {matchStatus = 200}
 
-                it "responds with public dreams when there's no current user" $ do
-                    get "/api/users/1/dreams"
-                        `shouldRespondWith` [json|[
-                            {"nightmare":false,
-                            "lucid":false,
-                            "private":false,
-                            "emotions":["joy"],
-                            "recurring":true,
-                            "date":"2017-02-14T00:00:00Z",
-                            "starred":false,
-                            "dreamer_id":1,
-                            "dream_id":1,
-                            "title":"Nena's dream",
-                            "description":"Nena dreams"
-                            }]|] {matchStatus = 200}
+            it "responds with public dreams when there's no current user" $ do
+                get "/api/users/1/dreams"
+                    `shouldRespondWith` [json|[
+                        {"nightmare":false,
+                        "lucid":false,
+                        "private":false,
+                        "emotions":["joy"],
+                        "recurring":true,
+                        "date":"2017-02-14T00:00:00Z",
+                        "starred":false,
+                        "dreamer_id":1,
+                        "dream_id":1,
+                        "title":"Nena's dream",
+                        "description":"Nena dreams"
+                        }]|] {matchStatus = 200}
 
         where
             makeToken :: AuthenticatedUser -> ByteString
@@ -358,4 +358,3 @@ spec =
             authenticatedPost = authenticatedRequest methodPost
             authenticatedPut  = authenticatedRequest methodPut
             authenticatedDelete = authenticatedRequest methodDelete
-
