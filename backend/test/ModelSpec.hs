@@ -132,7 +132,105 @@ spec = do
                 liftIO $ dreamTitlesFor lucidCat `shouldBe` ["Nightmare", "Lucid"]
 
         -- TODO: user filters (gender, zodiac sign(?), location)
-        -- TODO: ranged filters (dreamedAt, pagination)
+        
+        it "returns ranged dreams (date ranges, limits, keyset pagination)" $ do
+            run $ do
+                accountant <- insert $ mkUser "accountant@alpaca.net" "Accountant" NonBinary
+                let accountantDream = mkDream accountant
+                    mkDate m d s = UTCTime (fromGregorian m d s) 0  
+                forM_ [("First", mkDate 2020 1 1), ("Second", mkDate 2020 1 2), ("Third", mkDate 2020 1 3), ("Millionth", mkDate 2020 11 11)] $ \(t, c) -> do
+                    insert_ $ accountantDream t "desc" ["joy"] c Nothing
+
+                let filteredDreams' fs = filteredDreams fs $ Just (accountant, False)
+                beforeTheSecond <- filteredDreams' $ filterDate (Just $ mkDate 2020 1 2) Nothing
+                afterTheSecond <- filteredDreams'  $ filterDate  Nothing (Just $ mkDate 2020 1 2)
+                beginningOfJan <- filteredDreams'  $ filterDate (Just $ mkDate 2020 1 3) (Just $ mkDate 2020 1 1)
+                onlyLatest <- filteredDreams' $ limitTo 1
+                seenItBefore <- filteredDreams' $ (limitTo 2) {filterLastSeenId = Just $ toSqlKey 4}
+
+                liftIO $ dreamTitlesFor beforeTheSecond `shouldBe` ["Second", "First"]
+                liftIO $ dreamTitlesFor afterTheSecond `shouldBe` ["Millionth", "Third", "Second"]
+                liftIO $ dreamTitlesFor beginningOfJan `shouldBe` ["Third", "Second", "First"]
+                liftIO $ dreamTitlesFor onlyLatest `shouldBe` ["Millionth"]
+                liftIO $ dreamTitlesFor seenItBefore `shouldBe` ["Third", "Second"]
+
+
+limitTo :: Int64 -> DreamFilters
+limitTo l =
+     DreamFilters
+         { filterLucid = Nothing,
+           filterNightmare = Nothing,
+           filterRecurring = Nothing,
+           filterEmotions =  Nothing,
+           filterKeyword = Nothing,
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore = Nothing,
+           filterAfter = Nothing,
+           filterLimit = Just l,
+           filterLastSeenId = Nothing
+         }
+
+filterDate :: Maybe UTCTime -> Maybe UTCTime -> DreamFilters
+filterDate before Nothing =
+     DreamFilters
+         { filterLucid = Nothing,
+           filterNightmare = Nothing,
+           filterRecurring = Nothing,
+           filterEmotions =  Nothing,
+           filterKeyword = Nothing,
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore = before,
+           filterAfter = Nothing,
+           filterLimit = Nothing,
+           filterLastSeenId = Nothing
+         }
+
+filterDate Nothing after =
+     DreamFilters
+         { filterLucid = Nothing,
+           filterNightmare = Nothing,
+           filterRecurring = Nothing,
+           filterEmotions =  Nothing,
+           filterKeyword = Nothing,
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore = Nothing,
+           filterAfter =  after,
+           filterLimit = Nothing,
+           filterLastSeenId = Nothing
+         }
+
+filterDate before after =
+     DreamFilters
+         { filterLucid = Nothing,
+           filterNightmare = Nothing,
+           filterRecurring = Nothing,
+           filterEmotions =  Nothing,
+           filterKeyword = Nothing,
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore =  before,
+           filterAfter =  after,
+           filterLimit = Nothing,
+           filterLastSeenId = Nothing
+         }
+
+filterDate Nothing Nothing =
+     DreamFilters
+         { filterLucid = Nothing,
+           filterNightmare = Nothing,
+           filterRecurring = Nothing,
+           filterEmotions =  Nothing,
+           filterKeyword = Nothing,
+           filterBirthplace = Nothing,
+           filterGender = Nothing,
+           filterBefore = Nothing,
+           filterAfter = Nothing,
+           filterLimit = Nothing,
+           filterLastSeenId = Nothing
+         }         
 
 -- buncha filters
 onlyLucid :: DreamFilters
