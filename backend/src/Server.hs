@@ -572,6 +572,12 @@ login _ jwts Login {..} = do
 
 -- Handlers that check their own authentication
 
+privateDreamsFor :: (Key UserAccount) -> Maybe (Key UserAccount, Bool)
+privateDreamsFor u = Just (u, True)
+
+publicDreamsFor :: (Key UserAccount) -> Maybe (Key UserAccount, Bool)
+publicDreamsFor u = Just (u, False) 
+
 searchDreams :: AuthResult AuthenticatedUser
   -> Bool -- only mine?
   -> Maybe Username
@@ -590,26 +596,31 @@ searchDreams :: AuthResult AuthenticatedUser
   -> AppM [DreamWithUserInfo]
 
 -- if the "mine" flag is specified, search only my dreams. Convenience to not have to provide my own username.
-searchDreams (Authenticated (AuthenticatedUser auId)) True _ t g z l n r es k b a lt ls =
-  let currentUserId = toSqlKey $ userId $ auId
+searchDreams (Authenticated user) True _ t g z l n r es k b a lt ls =
+  let currentUserId = toSqlKey $ userId $ auId user
   in
-    searchDreams' (Just (currentUserId, True)) t g z l n r es k b a lt ls
+    searchDreams' (privateDreamsFor currentUserId) t g z l n r es k b a lt ls
 
+-- asking for "mine," but there is no me.
 searchDreams _ True _ _ _ _ _ _ _ _ _ _ _ _ _ =
   throwError $ err401 {errBody= "Need to be signed in to search your own dreams!"}
 
+-- not searching by username: we're just searching public dreams for everyone.
+searchDreams _ _ Nothing t g z l n r es k b a lt ls =
+  searchDreams' Nothing t g z l n r es k b a lt ls
+
 -- searching a user's dreams: if I provide my own username, search my dreams. If I provide someone else's,
 -- search their _public_ dreams.
-searchDreams (Authenticated (AuthenticatedUser auId)) _ (Just username) t g z l n r es k b a lt ls = do
+searchDreams (Authenticated user) _ (Just username) t g z l n r es k b a lt ls = do
   requestedUser <- runDB $ getBy $ UniqueUsername username
-  let currentUserId = toSqlKey $ userId $ auId
+  let currentUserId = toSqlKey $ userId $ auId user
   case requestedUser of
     Nothing -> throwError $ err404 {errBody =  "The requested user is not a known dreamer."}
     Just (Entity requestedUserId _) -> 
       if (currentUserId == requestedUserId) then
-        searchDreams' (Just (requestedUserId, True)) t g z l n r es k b a lt ls
+        searchDreams' (privateDreamsFor requestedUserId) t g z l n r es k b a lt ls
       else
-        searchDreams' (Just (requestedUserId, False)) t g z l n r es k b a lt ls
+        searchDreams' (publicDreamsFor requestedUserId) t g z l n r es k b a lt ls
 
 -- not authenticated (or failed authentication,) but searching a specific user's dreams:
 -- always search as a non-owner
@@ -618,11 +629,7 @@ searchDreams _ _ (Just username) t g z l n r es k b a lt ls = do
   case requestedUser of
     Nothing -> throwError $ err404 {errBody = "The requested user is not a known dreamer."}
     Just (Entity requestedUserId _) ->
-      searchDreams' (Just (requestedUserId, False)) t g z l n r es k b a lt ls
-
--- not searching by username: we're just searching public dreams for everyone.
-searchDreams _ _ Nothing t g z l n r es k b a lt ls =
-  searchDreams' Nothing t g z l n r es k b a lt ls
+      searchDreams' (publicDreamsFor requestedUserId) t g z l n r es k b a lt ls
 
 searchDreams' :: Maybe (Key UserAccount, Bool)
   -> Maybe Text -- location
