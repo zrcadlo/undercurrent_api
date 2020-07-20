@@ -34,7 +34,7 @@ import Util
 -- | "Resource" types
 data NewUserAccount = NewUserAccount
   { username :: Username,
-    email :: Text,
+    email :: Email,
     gender :: Maybe Gender,
     birthday :: Maybe UTCTime,
     location :: Maybe Text,
@@ -71,7 +71,7 @@ instance ToSample NewUserAccount where
 
 data UpdateUserAccount = UpdateUserAccount
   { updateUsername :: Maybe Username,
-    updateEmail :: Maybe Text,
+    updateEmail :: Maybe Email,
     updateGender :: Maybe Gender,
     updateBirthday :: Maybe UTCTime,
     updateLocation :: Maybe Text,
@@ -259,7 +259,7 @@ instance ToSample DreamUpdate where
           (Just False)
 
 data Login = Login
-  { loginEmail :: Text,
+  { loginEmail :: Email,
     loginPassword :: Password
   }
   deriving (Show, Generic)

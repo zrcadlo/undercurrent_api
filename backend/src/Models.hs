@@ -45,9 +45,9 @@ import Util (zeroTime)
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
     UserAccount
-        email Text sqltype=citext
+        email Email
         password (PasswordHash Argon2)
-        username Username sqltype=citext
+        username Username
         gender Gender Maybe
         birthday UTCTime Maybe
         location Text Maybe

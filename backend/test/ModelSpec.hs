@@ -37,12 +37,12 @@ prepareDB = do
 run :: ReaderT SqlBackend (NoLoggingT IO) () -> IO ()
 run f =  withDBConn $ prepareDB >> f >> dropModels
 
-mkUser :: Text -> Text -> Gender -> UserAccount
+mkUser :: Username -> Email -> Gender -> UserAccount
 mkUser username email gender = 
     UserAccount
         email
         (unsafePerformIO $ hashPassword "defaultPassword") 
-        (Username username)
+        username
         (Just gender) 
         (Just zeroTime)
         Nothing

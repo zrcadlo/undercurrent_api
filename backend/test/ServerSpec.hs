@@ -151,7 +151,7 @@ spec =
                         gender: "Female",
                         birthday: "2017-02-14T00:00:00Z",
                         location: "Tokyo, Japan",
-                        zodiac_sign: "Libra"
+                        zodiac_sign: "Scorpio"
                     }|] {matchStatus = 200}
 
         describe "PUT /api/user" $ do

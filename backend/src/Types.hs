@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -10,9 +11,11 @@ import           RIO
 import           System.Envy
 import Database.Persist.TH (derivePersistField)
 import Data.Aeson.Types
-import Database.Persist.Postgresql (PersistFieldSql, ConnectionPool)
-import Database.Persist (PersistField)
-import RIO.Text (unpack, length)
+import Database.Persist.Postgresql (PersistFieldSql(..), ConnectionPool)
+import Database.Persist (PersistField(..), PersistValue(..), SqlType(SqlOther))
+import RIO.Text (pack, unpack, length)
+import Data.CaseInsensitive (CI)
+import qualified Data.CaseInsensitive as CI
 
 type Port = Int
 
@@ -64,6 +67,22 @@ instance FromEnv EnvConfig
 --makeDBConnectionPool :: DatabaseUrl -> IO ConnectionPool
 -- makeDBConnectionPool :: DatabaseUrl -> RIO App ConnectionPool
 
+-- Enable ability to use `citext` types:
+-- https://gist.github.com/MaxGabriel/9e757f2da60ac53b45bb06b2b097d86b
+instance PersistField (CI Text) where
+  toPersistValue ciText = PersistDbSpecific $ encodeUtf8 $ CI.original ciText
+  fromPersistValue (PersistDbSpecific bs) = Right $ CI.mk $ decodeUtf8Lenient bs
+  fromPersistValue x = Left $ pack $ "Expected PersistDBSpecific, received " <> show x
+  
+instance PersistFieldSql (CI Text) where
+  sqlType _ = SqlOther "citext"
+
+instance (ToJSON (CI Text)) where
+  toJSON a = String $ CI.original a
+
+instance (FromJSON (CI Text)) where
+  parseJSON (String text) = pure $ CI.mk text
+  parseJSON v = fail $ "Expected string, encountered " <> (show v)
 
 -- Domain-specific types (needed here because the Models.hs module, using template haskell, wouldn't be able to
 -- find them.)
@@ -93,13 +112,13 @@ mkEmotionLabel s =
   else
     Nothing
 
-newtype Username = Username Text
+newtype Username = Username (CI Text)
   deriving (Show, Eq, Generic, PersistField, PersistFieldSql, IsString)
 
 mkUsername :: Text -> Either Text Username
 mkUsername u =
   if ((RIO.Text.length u) <= 100) then
-    Right $ Username u
+    Right $ Username $ CI.mk u
   else
     Left "Username can't be longer than 100 characters."
 
@@ -109,6 +128,12 @@ instance FromJSON Username where
     case (mkUsername text) of
       Right u -> pure u
       Left e -> fail $ unpack e
+
+newtype Email = Email (CI Text)
+  deriving (Show, Eq, Generic, PersistField, PersistFieldSql, IsString)
+
+instance ToJSON Email
+instance FromJSON Email
 
 data ZodiacSign =
     Aries
