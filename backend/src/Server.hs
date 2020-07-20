@@ -611,6 +611,8 @@ searchDreams _ _ Nothing t g z l n r es k b a lt ls =
 
 -- searching a user's dreams: if I provide my own username, search my dreams. If I provide someone else's,
 -- search their _public_ dreams.
+-- TODO(luis) maybe this should behave exactly as the non-authenticated version? Even if I provide
+-- my own username, only search my public dreams? It's easy to update, just delete this match!
 searchDreams (Authenticated user) _ (Just username) t g z l n r es k b a lt ls = do
   requestedUser <- runDB $ getBy $ UniqueUsername username
   let currentUserId = toSqlKey $ userId $ auId user
