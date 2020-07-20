@@ -336,7 +336,7 @@ instance ToParam (QueryParam "recurring" Bool) where
 
 instance ToParam (QueryParams "emotions" EmotionLabel) where
   toParam _ =
-    DocQueryParam "emotions" ["joy"] ("Filter by emotions: requires a list, will return dreams that have all the given emotions") List
+    DocQueryParam "emotions" ["joy"] ("Filter by emotions: requires a list, will return dreams that have all the given emotions" <> spiel) List
 
 instance ToParam (QueryParam "location" Text) where
   toParam _ =
@@ -344,7 +344,7 @@ instance ToParam (QueryParam "location" Text) where
 
 instance ToParam (QueryParam "keywords" Text) where
   toParam _ =
-    DocQueryParam "keywords" ["some cats are scary"] ("Filter by keyword, free text search.") Normal
+    DocQueryParam "keywords" ["some cats are scary"] ("Filter by keyword, free text search." <> spiel) Normal
 
 instance ToParam (QueryParam "gender" Gender) where
   toParam _ =
@@ -357,12 +357,12 @@ instance ToParam (QueryParam "zodiac_sign" ZodiacSign) where
 instance ToParam (QueryParam "before" UTCTime) where
   toParam _ =
     DocQueryParam "before" ["2017-02-14T00:00:00Z"] ("Filter by dreamed at date: will returns any dreams before the given\
-    \date, inclusive." <> spiel) Normal
+    \ date, inclusive." <> spiel) Normal
 
 instance ToParam (QueryParam "after" UTCTime) where
   toParam _ =
     DocQueryParam "after" ["2017-02-14T00:00:00Z"] ("Filter by dreamed at date: will returns any dreams after the given\
-    \date, inclusive." <> spiel) Normal
+    \ date, inclusive." <> spiel) Normal
 
 instance ToParam (QueryParam "limit" Int64) where
   toParam _ =
@@ -374,11 +374,11 @@ instance ToParam (QueryParam "last_seen_id" (Key Dream)) where
 
 instance ToParam (QueryParam "username" Username) where
   toParam _ =
-    DocQueryParam "username" ["nena.alpaca"] ("A username. Checks existence. If you provide your own, we'll search private dreams too.") Normal
+    DocQueryParam "username" ["nena.alpaca"] ("A username. Checks existence. If you provide your own, we'll search private dreams too. If none is provide, search all public dreams.") Normal
 
 instance ToParam (QueryFlag "mine") where
   toParam _ =
-    DocQueryParam "mine" [] ("If specified, will only search the current user's dreams. Because this is a flag, you can call it like this: /api/dreams/mine") Flag
+    DocQueryParam "mine" [] ("If specified, will only search the current user's dreams. Because this is a flag, you can call it like this: /api/dreams?mine") Flag
 
 -- | API types
 -- inspired by: https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
@@ -594,6 +594,9 @@ searchDreams (Authenticated (AuthenticatedUser auId)) True _ t g z l n r es k b 
   let currentUserId = toSqlKey $ userId $ auId
   in
     searchDreams' (Just (currentUserId, True)) t g z l n r es k b a lt ls
+
+searchDreams _ True _ t g z l n r es k b a lt ls =
+  throwError $ err401 {errBody= "Need to be signed in to search your own dreams!"}
 
 -- searching a user's dreams: if I provide my own username, search my dreams. If I provide someone else's,
 -- search their _public_ dreams.

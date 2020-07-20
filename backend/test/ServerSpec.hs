@@ -224,12 +224,12 @@ spec =
                     }|]
                     `shouldRespondWith` 201
 
-        describe "GET /api/user/dreams" $ do
+        describe "GET /api/dreams?mine" $ do
             it "responds with 401 if no user is signed in" $ do
-                get "/api/user/dreams" `shouldRespondWith` 401
+                get "/api/dreams?mine" `shouldRespondWith` 401
             
             it "responds with the current user's dreams, private and public, when authenticated" $ do
-                authenticatedGet "/api/user/dreams" currentUserToken ""
+                authenticatedGet "/api/dreams?mine" currentUserToken ""
                     `shouldRespondWith` [json|[
                         {"nightmare":false,
                         "lucid":false,
@@ -325,9 +325,9 @@ spec =
                 authenticatedDelete "/api/user/dreams/5" pacoUserToken ""
                     `shouldRespondWith` 204
 
-        describe "GET /api/users/:userId/dreams" $ do
+        describe "GET /api/dreams?username=Another%20Nena" $ do
             it "responds with all dreams, public and private, if the current user is the owner" $ do
-                authenticatedGet "/api/users/1/dreams" currentUserToken ""
+                authenticatedGet "/api/dreams?username=Another%20Nena" currentUserToken ""
                     `shouldRespondWith` [json|[
                         {"nightmare":false,
                         "lucid":false,
@@ -362,7 +362,7 @@ spec =
                         }]|] {matchStatus = 200}
 
             it "responds with public dreams when the current user is someone else" $ do
-                authenticatedGet "/api/users/1/dreams" charlieUserToken ""
+                authenticatedGet "/api/dreams?username=Another%20Nena" charlieUserToken ""
                     `shouldRespondWith` [json|[
                         {"nightmare":false,
                         "lucid":false,
@@ -382,7 +382,7 @@ spec =
                         }]|] {matchStatus = 200}
 
             it "responds with public dreams when there's no current user" $ do
-                get "/api/users/1/dreams"
+                get "/api/dreams?username=Another%20Nena"
                     `shouldRespondWith` [json|[
                         {"nightmare":false,
                         "lucid":false,
