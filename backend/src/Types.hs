@@ -4,6 +4,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
+-- only for the benefit of the CI instances. I'm so sorry.
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Types where
 
 import           GHC.Generics

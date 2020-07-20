@@ -322,8 +322,11 @@ instance ToCapture (Capture "userId" Int64) where
   toCapture _ = DocCapture "userId" "ID of the user to inspect, as returned when creating it."
 
 
+spiel :: String
 spiel = " (if not provided, won't affect the filtering.)"
-anyFlag = ["true", "false", "null"]
+anyFlag :: [String]
+anyFlag = ["true", "false"]
+
 instance ToParam (QueryParam "lucid" Bool) where
   toParam _ =
     DocQueryParam "lucid" anyFlag ("Filter by: is lucid or not " <> spiel) Normal
