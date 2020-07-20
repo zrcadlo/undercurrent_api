@@ -82,8 +82,8 @@ mkDream userId t d es at (Just (lucid, nightmare, recurring, private, starred)) 
         zeroTime
         zeroTime
 
-dreamTitlesFor :: [Entity Dream] -> [Text]
-dreamTitlesFor = map (\(Entity _ d) -> dreamTitle d)
+dreamTitlesFor :: [(Entity Dream, Entity UserAccount)] -> [Text]
+dreamTitlesFor = map (\(Entity _ d, _) -> dreamTitle d)
 
 spec :: Spec
 spec = do

@@ -241,7 +241,11 @@ spec =
                         "dreamer_id":1,
                         "dream_id":2,
                         "title":"Nena's secret dream",
-                        "description":"Nena dreams"},
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"},
                         {"nightmare":false,
                         "lucid":false,
                         "private":false,
@@ -252,7 +256,11 @@ spec =
                         "dreamer_id":1,
                         "dream_id":1,
                         "title":"Nena's dream",
-                        "description":"Nena dreams"
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
 
         describe "POST /api/user/dreams" $ do
@@ -331,7 +339,11 @@ spec =
                         "dreamer_id":1,
                         "dream_id":2,
                         "title":"Nena's secret dream",
-                        "description":"Nena dreams"},
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"},
                         {"nightmare":false,
                         "lucid":false,
                         "private":false,
@@ -342,7 +354,11 @@ spec =
                         "dreamer_id":1,
                         "dream_id":1,
                         "title":"Nena's dream",
-                        "description":"Nena dreams"
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
 
             it "responds with public dreams when the current user is someone else" $ do
@@ -358,7 +374,11 @@ spec =
                         "dreamer_id":1,
                         "dream_id":1,
                         "title":"Nena's dream",
-                        "description":"Nena dreams"
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
 
             it "responds with public dreams when there's no current user" $ do
@@ -374,7 +394,11 @@ spec =
                         "dreamer_id":1,
                         "dream_id":1,
                         "title":"Nena's dream",
-                        "description":"Nena dreams"
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
 
         where

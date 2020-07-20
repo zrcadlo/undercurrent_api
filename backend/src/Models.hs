@@ -150,10 +150,14 @@ data DreamFilters = DreamFilters
     , filterRecurring :: Maybe Bool
     , filterEmotions :: Maybe [EmotionLabel]
     , filterKeyword :: Maybe Text
-    , filterBirthplace :: Maybe Text
+    -- user properties
+    , filterLocation :: Maybe Text
     , filterGender :: Maybe Gender
+    , filterZodiacSign :: Maybe ZodiacSign
+    -- range properties
     , filterBefore :: Maybe UTCTime
     , filterAfter :: Maybe UTCTime  
+    -- pagination properties
     , filterLimit :: Maybe Int64
     , filterLastSeenId :: Maybe (Key Dream)
     } deriving (Eq, Show, Generic)
@@ -173,6 +177,7 @@ instance ToSample DreamFilters where
                                         Nothing
                                         Nothing
                                         Nothing
+                                        Nothing
                                         (Just 200)
                                         Nothing
 
@@ -189,15 +194,17 @@ noDreamFilters = DreamFilters
     Nothing
     Nothing
     Nothing
+    Nothing
 
 filteredDreams
     :: (MonadIO m)
     => DreamFilters
     -> (Maybe (Key UserAccount, Bool))
-    -> ReaderT SqlBackend m [Entity Dream]
+    -> ReaderT SqlBackend m [(Entity Dream, Entity UserAccount)]
 filteredDreams DreamFilters{..} userConditions = do
     let maybeNoConditions = maybe (return ())
     E.select . E.from $ \(dream `E.InnerJoin` userAccount) -> do
+        -- Ownership filters
         E.on (userAccount E.^. UserAccountId E.==. dream E.^. DreamUserId)
         maybe
             -- if no user conditions, simply look through public dreams
@@ -221,8 +228,8 @@ filteredDreams DreamFilters{..} userConditions = do
                     )
             )
             userConditions
-        -- fun with optional filters!
         -- inspired by: https://gist.github.com/bitemyapp/89c5e0663bddc3b1c78f5e3fa33e7dc4#file-companiescount-hs-L79
+        -- Dream Filters
         maybeNoConditions (\l -> E.where_ (dream E.^. DreamIsLucid     E.==. E.val l)) filterLucid
         maybeNoConditions (\n -> E.where_ (dream E.^. DreamIsNightmare E.==. E.val n)) filterNightmare
         maybeNoConditions (\r -> E.where_ (dream E.^. DreamIsRecurring E.==. E.val r)) filterRecurring
@@ -238,8 +245,11 @@ filteredDreams DreamFilters{..} userConditions = do
                     (webTsQuery $ E.val kw)
             )
             filterKeyword
-        maybeNoConditions (\b -> E.where_ (userAccount E.^. UserAccountLocation E.==. (E.just $ E.val b))) filterBirthplace
+        -- User Account filters
+        maybeNoConditions (\b -> E.where_ (userAccount E.^. UserAccountLocation E.==. (E.just $ E.val b))) filterLocation
         maybeNoConditions (\g -> E.where_ (userAccount E.^. UserAccountGender E.==. (E.just $ E.val g))) filterGender
+        maybeNoConditions (\z -> E.where_ (userAccount E.^. UserAccountZodiacSign E.==. (E.just $ E.val z))) filterZodiacSign
+        -- Ranges
         maybeNoConditions (\before -> E.where_ (dream E.^. DreamDreamedAt E.<=. E.val before)) filterBefore
         maybeNoConditions (\after -> E.where_ (dream E.^. DreamDreamedAt  E.>=. E.val after)) filterAfter
         -- keyset pagination
@@ -247,13 +257,13 @@ filteredDreams DreamFilters{..} userConditions = do
         -- default page size is 200, max is 1000.
         E.limit $ maybe 200 (\l-> if l > 1000 then 1000 else l) filterLimit
         E.orderBy [ E.desc (dream E.^. DreamId) ]
-        return dream
+        return (dream, userAccount)
 
 userDreams
     :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
     => Key UserAccount
     -> Bool
-    -> m [Entity Dream]
+    -> m [(Entity Dream, Entity UserAccount)]
 userDreams u o = runDB $ filteredDreams noDreamFilters $ Just (u, o)
 
 

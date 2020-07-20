@@ -15,7 +15,7 @@ import Data.Password (Password)
 import Data.Password.Argon2 (checkPassword, hashPassword)
 import Data.Password.Instances ()
 import Database.Esqueleto.PostgreSQL.JSON (JSONB (..))
-import Database.Persist.Postgresql (insertBy, (=.), Entity (..), delete, fromSqlKey, get, getBy, insertEntity, toSqlKey, update)
+import Database.Persist.Postgresql (getEntity, insertBy, (=.), Entity (..), delete, fromSqlKey, get, getBy, insertEntity, toSqlKey, update)
 import Import
 import Models
 import Network.HTTP.Types (status200)
@@ -168,7 +168,7 @@ instance ToSample NewDream where
         False
         True
 
-data DreamWithKeys = DreamWithKeys
+data DreamWithUserInfo = DreamWithUserInfo
   { dkTitle :: Text,
     dkDate :: UTCTime,
     dkDescription :: Text,
@@ -179,19 +179,23 @@ data DreamWithKeys = DreamWithKeys
     dkPrivate :: Bool,
     dkStarred :: Bool,
     dkDreamerId :: Key UserAccount,
-    dkDreamId :: Key Dream
+    dkDreamId :: Key Dream,
+    dkDreamerUsername :: Username,
+    dkDreamerLocation :: Maybe Text,
+    dkDreamerGender :: Maybe Gender,
+    dkDreamerZodiacSign :: Maybe ZodiacSign
   }
   deriving (Eq, Show, Generic)
 
-instance FromJSON DreamWithKeys where
+instance FromJSON DreamWithUserInfo where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = dropPrefix "dk"}
 
-instance ToJSON DreamWithKeys where
+instance ToJSON DreamWithUserInfo where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = dropPrefix "dk"}
 
-dreamWithKeys :: (Entity Dream) -> DreamWithKeys
-dreamWithKeys (Entity dreamId Dream {..}) =
-  DreamWithKeys
+dreamWithKeys :: (Entity Dream, Entity UserAccount) -> DreamWithUserInfo
+dreamWithKeys (Entity dreamId Dream {..}, Entity _ UserAccount {..}) =
+  DreamWithUserInfo
     { dkTitle = dreamTitle,
       dkDate = dreamDreamedAt,
       dkDescription = dreamDescription,
@@ -202,15 +206,19 @@ dreamWithKeys (Entity dreamId Dream {..}) =
       dkPrivate = dreamIsPrivate,
       dkStarred = dreamIsStarred,
       dkDreamerId = dreamUserId,
-      dkDreamId = dreamId
+      dkDreamId = dreamId,
+      dkDreamerUsername = userAccountUsername,
+      dkDreamerLocation = userAccountLocation,
+      dkDreamerGender = userAccountGender,
+      dkDreamerZodiacSign = userAccountZodiacSign
     }
 
-instance ToSample DreamWithKeys where
+instance ToSample DreamWithUserInfo where
   toSamples _ =
-    [("A dream with the dream id and dreamer id included", sampleDreamWithKeys)]
+    [("A dream with the dream id and dreamer id included", sampleDreamWithUserInfo)]
     where
-      sampleDreamWithKeys =
-        DreamWithKeys
+      sampleDreamWithUserInfo =
+        DreamWithUserInfo
           "I dreamed of our alpacas"
           zeroTime
           "Some alpacas were wearing sunglasses"
@@ -222,6 +230,11 @@ instance ToSample DreamWithKeys where
           True
           (toSqlKey 42)
           (toSqlKey 42)
+          "alpaca.cool69420"
+          (Just "Queens")
+          (Just Female)
+          (Just Scorpio)
+
 
 data DreamUpdate = DreamUpdate
   { updateTitle :: Maybe Text,
@@ -311,10 +324,10 @@ type Protected =
   "api" :> "user" :> Get '[JSON] UserAccount
     :<|> "api" :> "user" :> ReqBody '[JSON] UpdateUserAccount :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "password" :> ReqBody '[JSON] UpdatePassword :> Verb 'PUT 204 '[JSON] NoContent
-    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] NewDream :> PostCreated '[JSON] DreamWithKeys
+    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] NewDream :> PostCreated '[JSON] DreamWithUserInfo
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> ReqBody '[JSON] DreamUpdate :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> Verb 'DELETE 204 '[JSON] NoContent
-    :<|> "api" :> "user" :> "dreams" :> Get '[JSON] [DreamWithKeys]
+    :<|> "api" :> "user" :> "dreams" :> Get '[JSON] [DreamWithUserInfo]
 
 type Unprotected =
   "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
@@ -322,7 +335,7 @@ type Unprotected =
 
 -- TODO(luis) add a limit/pagination
 type KindaProtected =
-  "api" :> "users" :> Capture "userId" Int64 :> "dreams" :> Get '[JSON] [DreamWithKeys]
+  "api" :> "users" :> Capture "userId" Int64 :> "dreams" :> Get '[JSON] [DreamWithUserInfo]
 
 type Static =
   "docs" :> Raw
@@ -393,11 +406,12 @@ updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
           runDB $ update (toSqlKey (userId auId)) [UserAccountPassword =. pwHash]
           return NoContent
 
-createDream :: AuthenticatedUser -> NewDream -> AppM DreamWithKeys
+createDream :: AuthenticatedUser -> NewDream -> AppM DreamWithUserInfo
 createDream (AuthenticatedUser auId) NewDream {..} = do
-  let dbDream =
+  let userKey = toSqlKey $ userId auId :: Key UserAccount
+      dbDream =
         Dream
-          (toSqlKey $ userId $ auId)
+          userKey
           title
           description
           lucid
@@ -410,8 +424,12 @@ createDream (AuthenticatedUser auId) NewDream {..} = do
           zeroTime
           zeroTime
 
-  dreamEntity <- runDB $ insertEntity dbDream
-  return $ dreamWithKeys dreamEntity
+  me <- runDB $ getEntity userKey
+  case me of
+    Nothing -> throwError $ err404 {errBody = "Seems like I lost myself in my dreams!"}
+    Just userEntity -> do
+      dreamEntity <- runDB $ insertEntity dbDream
+      return $ dreamWithKeys (dreamEntity, userEntity)
 
 updateDream :: AuthenticatedUser -> Int64 -> DreamUpdate -> AppM NoContent
 updateDream (AuthenticatedUser auId) dreamId updates = do
@@ -438,7 +456,7 @@ deleteDream (AuthenticatedUser auId) dreamId = do
         else throwError $ err403 {errBody = "This is not your dream."}
 
 -- TODO: do we need pagination and filtering here?
-myDreams :: AuthenticatedUser -> AppM [DreamWithKeys]
+myDreams :: AuthenticatedUser -> AppM [DreamWithUserInfo]
 myDreams (AuthenticatedUser auId) = do
   let userKey = toSqlKey $ userId auId :: Key UserAccount
   allMyDreams <- userDreams userKey True
@@ -482,7 +500,7 @@ login _ jwts Login {..} = do
 -- Handlers that check their own authentication
 
 -- TODO: do we need to apply filters here, too?
-allUserDreams :: AuthResult AuthenticatedUser -> Int64 -> AppM [DreamWithKeys]
+allUserDreams :: AuthResult AuthenticatedUser -> Int64 -> AppM [DreamWithUserInfo]
 allUserDreams authResult requestedId = do
   let requestedUserId = toSqlKey requestedId :: Key UserAccount
   let isOwner = case authResult of
