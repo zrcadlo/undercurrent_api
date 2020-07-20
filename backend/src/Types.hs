@@ -1,8 +1,12 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
+-- only for the benefit of the CI instances. I'm so sorry.
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Types where
 
 import           GHC.Generics
@@ -10,9 +14,12 @@ import           RIO
 import           System.Envy
 import Database.Persist.TH (derivePersistField)
 import Data.Aeson.Types
-import Database.Persist.Postgresql (PersistFieldSql, ConnectionPool)
-import Database.Persist (PersistField)
-import RIO.Text (unpack)
+import Database.Persist.Postgresql (PersistFieldSql(..), ConnectionPool)
+import Database.Persist (PersistField(..), PersistValue(..), SqlType(SqlOther))
+import RIO.Text (pack, unpack, length)
+import Data.CaseInsensitive (CI)
+import qualified Data.CaseInsensitive as CI
+import Web.HttpApiData
 
 type Port = Int
 
@@ -64,21 +71,39 @@ instance FromEnv EnvConfig
 --makeDBConnectionPool :: DatabaseUrl -> IO ConnectionPool
 -- makeDBConnectionPool :: DatabaseUrl -> RIO App ConnectionPool
 
+-- Enable ability to use `citext` types:
+-- https://gist.github.com/MaxGabriel/9e757f2da60ac53b45bb06b2b097d86b
+instance PersistField (CI Text) where
+  toPersistValue ciText = PersistDbSpecific $ encodeUtf8 $ CI.original ciText
+  fromPersistValue (PersistDbSpecific bs) = Right $ CI.mk $ decodeUtf8Lenient bs
+  fromPersistValue x = Left $ pack $ "Expected PersistDBSpecific, received " <> show x
+  
+instance PersistFieldSql (CI Text) where
+  sqlType _ = SqlOther "citext"
+
+instance (ToJSON (CI Text)) where
+  toJSON a = String $ CI.original a
+
+instance (FromJSON (CI Text)) where
+  parseJSON (String text) = pure $ CI.mk text
+  parseJSON v = fail $ "Expected string, encountered " <> (show v)
 
 -- Domain-specific types (needed here because the Models.hs module, using template haskell, wouldn't be able to
 -- find them.)
 
 data Gender = Female | Male | NonBinary
-      deriving (Show, Read, Eq, Generic)
+      deriving (Show, Read, Eq, Generic, Bounded, Enum)
 derivePersistField "Gender"
 instance ToJSON Gender
 instance FromJSON Gender
+instance FromHttpApiData Gender where
+  parseUrlPiece = parseBoundedTextData
 
 emotionLabels :: [Text]
 emotionLabels = ["joy", "trust", "anticipation", "surprise", "disgust", "sadness", "fear", "anger", "acceptance", "admiration", "affection", "annoyance", "alienation", "amazement", "anxiety", "apathy", "awe", "betrayal", "bitter", "bold", "boredom", "bravery", "brooding", "calm", "cautious", "cheerful", "comfortable", "confused", "cranky", "crushed", "curious", "denial", "despair", "disappointed", "distress", "drained", "eager", "embarassed", "empty", "energized", "envy", "excited", "foreboding", "fulfilled", "grateful", "guilt", "hatred", "shame", "helpless", "hollow", "hopeful", "humiliated", "hurt", "inspired", "intimidated", "irritated", "jealous", "lazy", "lonely", "longing", "love", "lust", "mellow", "nervous", "numb", "panic", "paranoia", "peaceful", "pity", "powerful", "powerless", "protective", "proud", "reluctance", "remorse", "resentment", "self-conscious", "sensitive", "shock", "sick", "shy", "stressed", "tired", "alert", "vigilant", "weary", "worry"]
 
 newtype EmotionLabel = EmotionLabel Text
-  deriving (Show, Eq, Generic, PersistField, PersistFieldSql)
+  deriving (Show, Eq, Generic, PersistField, PersistFieldSql, IsString)
 instance ToJSON EmotionLabel
 instance FromJSON EmotionLabel where
   parseJSON = withText "EmotionLabel" $ \text ->
@@ -86,9 +111,62 @@ instance FromJSON EmotionLabel where
       Just el -> pure el
       Nothing -> fail $ unpack $ text <> " isn't a known emotion."
 
+instance FromHttpApiData EmotionLabel where
+  parseUrlPiece a =
+    case (mkEmotionLabel a) of
+      Nothing -> Left $ a <> " is not an emotion known to our database!" 
+      Just e -> Right $ e
+
 mkEmotionLabel :: Text -> Maybe EmotionLabel
 mkEmotionLabel s = 
   if s `elem` emotionLabels then
     Just $ EmotionLabel s
   else
     Nothing
+
+newtype Username = Username (CI Text)
+  deriving (Show, Eq, Generic, PersistField, PersistFieldSql, IsString)
+
+mkUsername :: Text -> Either Text Username
+mkUsername u =
+  if ((RIO.Text.length u) <= 100) then
+    Right $ Username $ CI.mk u
+  else
+    Left "Username can't be longer than 100 characters."
+
+instance ToJSON Username
+instance FromJSON Username where
+  parseJSON = withText "Username" $ \text ->
+    case (mkUsername text) of
+      Right u -> pure u
+      Left e -> fail $ unpack e
+
+instance FromHttpApiData Username where
+  parseUrlPiece = mkUsername
+
+newtype Email = Email (CI Text)
+  deriving (Show, Eq, Generic, PersistField, PersistFieldSql, IsString)
+
+instance ToJSON Email
+instance FromJSON Email
+
+data ZodiacSign =
+    Aries
+    | Taurus
+    | Gemini
+    | Cancer
+    | Leo
+    | Virgo
+    | Libra
+    | Scorpio
+    | Sagittarius
+    | Capricorn
+    | Aquarius
+    | Pisces
+    deriving (Show, Read, Eq, Generic, Bounded, Enum)
+
+derivePersistField "ZodiacSign"
+instance FromJSON ZodiacSign
+instance ToJSON ZodiacSign
+instance FromHttpApiData ZodiacSign where
+  parseUrlPiece = parseBoundedTextData

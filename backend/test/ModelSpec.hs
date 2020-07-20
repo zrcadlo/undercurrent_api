@@ -8,12 +8,13 @@ import Import
 import Test.Hspec
 import Models
 import Control.Monad.Logger (MonadLogger, NoLoggingT(runNoLoggingT))
-import Database.Persist.Postgresql (insert_, toSqlKey, getBy, Entity(..), insert, transactionUndo, runMigration, SqlBackend, runSqlConn, withPostgresqlConn, ConnectionString)
+import Database.Persist.Postgresql (runMigrationUnsafe, addMigration, insert_, toSqlKey, getBy, Entity(..), insert, transactionUndo, runMigration, SqlBackend, runSqlConn, withPostgresqlConn, ConnectionString)
 import Data.Password.Argon2 (hashPassword)
 import RIO.Time (fromGregorian, UTCTime(..))
 import Util (zeroTime)
 import System.IO.Unsafe (unsafePerformIO)
 import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
+import qualified Migrations as M
 
 
 testDB :: ConnectionString
@@ -24,7 +25,9 @@ withDBConn = runNoLoggingT . (withPostgresqlConn testDB) . runSqlConn
 
 prepareDB :: ReaderT SqlBackend (NoLoggingT IO) ()
 prepareDB = do
-    _ <- runMigration migrateAll
+    runMigration $ do
+        migrateAll
+    
     dropModels
 
 -- NOTE(luis) yeah, we're doing all (model) migrations, running the given spec, and then truncating all tables again
@@ -34,17 +37,18 @@ prepareDB = do
 run :: ReaderT SqlBackend (NoLoggingT IO) () -> IO ()
 run f =  withDBConn $ prepareDB >> f >> dropModels
 
-mkUser :: Text -> Text -> Gender -> UserAccount
-mkUser name email gender = 
+mkUser :: Username -> Email -> Gender -> UserAccount
+mkUser username email gender = 
     UserAccount
         email
         (unsafePerformIO $ hashPassword "defaultPassword") 
-        name
-        gender 
+        username
+        (Just gender) 
         (Just zeroTime)
         Nothing
-        (Just zeroTime)
-        (Just zeroTime)
+        (Just Capricorn)
+        zeroTime
+        zeroTime
 
 --mkDream :: Int -> 
 mkDream :: Key UserAccount -> Text -> Text -> [Text] -> UTCTime -> Maybe (Bool, Bool, Bool, Bool, Bool) -> Dream
@@ -78,8 +82,8 @@ mkDream userId t d es at (Just (lucid, nightmare, recurring, private, starred)) 
         zeroTime
         zeroTime
 
-dreamTitlesFor :: [Entity Dream] -> [Text]
-dreamTitlesFor = map (\(Entity _ d) -> dreamTitle d)
+dreamTitlesFor :: [(Entity Dream, Entity UserAccount)] -> [Text]
+dreamTitlesFor = map (\(Entity _ d, _) -> dreamTitle d)
 
 spec :: Spec
 spec = do

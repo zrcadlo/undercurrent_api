@@ -12,8 +12,8 @@ import Network.Wai (Application)
 import Servant.Auth.Server (makeJWT, JWTSettings, defaultJWTSettings, defaultCookieSettings, generateKey)
 import Server (AuthenticatedUser(..), UserId(..), app)
 import Run (makeDBConnectionPool)
-import Models (Dream(..), UserAccount(..), migrateAll, dropModels)
-import Database.Persist.Postgresql (insertMany, ConnectionString, runMigration, insert, withPostgresqlConn, runSqlConn)
+import Models (runMigrations, Dream(..), UserAccount(..), migrateAll, dropModels)
+import Database.Persist.Postgresql (runMigrationUnsafe, addMigration, insertMany, ConnectionString, runMigration, insert, withPostgresqlConn, runSqlConn)
 import Servant.Server (Context(..))
 import Network.HTTP.Types (methodDelete, methodGet, methodPut, methodPost)
 import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
@@ -24,6 +24,7 @@ import RIO.ByteString.Lazy (toStrict)
 import RIO.Time (fromGregorian, UTCTime(..))
 import Util
 import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
+import qualified Migrations as M
 
 testDB :: DatabaseUrl
 testDB = "postgresql://localhost/undercurrent_test?user=luis"
@@ -56,7 +57,9 @@ testDBBS = "postgresql://localhost/undercurrent_test?user=luis"
 setupData :: IO ()
 setupData = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
     -- run any missing schema migrations
-    _ <- runMigration migrateAll
+    runMigration $ do
+        migrateAll
+
     dropModels
     
     -- insert some "givens"
@@ -65,31 +68,34 @@ setupData = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
          UserAccount "nena@alpaca.net"
             hashedPw
             "Nena Alpaca"
-            Female
+            (Just Female)
             (Just (UTCTime (fromGregorian 2017 2 14) 0))
-            (Just "Tokyo, Japan") 
-            (Just (UTCTime (fromGregorian 2017 2 14) 0)) 
-            (Just (UTCTime (fromGregorian 2017 2 14) 0))
+            (Just "Tokyo, Japan")
+            (Just Scorpio)
+            zeroTime
+            zeroTime
 
     charlie <- insert $
             UserAccount "charlie@alpaca.net"
                 hashedPw
                 "Charlie Alpaca"
-                Male
+                (Just Male)
                 (Just zeroTime)
                 (Just "Tokyo Japan")
-                (Just zeroTime)
-                (Just zeroTime)
+                (Just Cancer)
+                zeroTime
+                zeroTime
 
     paco <- insert $
             UserAccount "paco@alpaca.net"
                 hashedPw
                 "Paco Alpaca"
-                NonBinary
+                (Just NonBinary)
                 (Just zeroTime)
                 (Just "Tokyo Japan")
-                (Just zeroTime)
-                (Just zeroTime)
+                (Just Capricorn)
+                zeroTime
+                zeroTime
 
     nenaDreams <- insertMany $ 
         [(Dream nena "Nena's dream" "Nena dreams" False False True False False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
@@ -141,16 +147,17 @@ spec =
                     `shouldRespondWith` 
                     [json|{
                         email: "nena@alpaca.net",
-                        name: "Nena Alpaca",
+                        username: "Nena Alpaca",
                         gender: "Female",
                         birthday: "2017-02-14T00:00:00Z",
-                        birthplace: "Tokyo, Japan"
+                        location: "Tokyo, Japan",
+                        zodiac_sign: "Scorpio"
                     }|] {matchStatus = 200}
 
         describe "PUT /api/user" $ do
             it "responds successfully when updating email and name" $ do
                 authenticatedPut "/api/user" currentUserToken
-                    [json|{name: "Another Nena", birthplace: "Shenzhen, China"}|]
+                    [json|{username: "Another Nena", location: "Shenzhen, China", zodiac_sign: "Cancer"}|]
                     `shouldRespondWith` 204
 
         describe "PUT /api/user/password" $ do
@@ -166,7 +173,7 @@ spec =
 
         describe "POST /api/users" $ do
             it "responds with 400 if required data is missing" $ do
-                postJSON "/api/users" [json|{name: "Luis"}|]
+                postJSON "/api/users" [json|{username: "Luis"}|]
                     `shouldRespondWith` 400
 
             it "responds with 409 if trying to create a user with an existing email" $ do
@@ -175,11 +182,35 @@ spec =
                         "email":"nena@alpaca.net",
                         "birthday":"2017-02-14T00:00:00Z",
                         "gender":"Male",
-                        "name":"Paco Alpaco",
+                        "username":"Paco Alpaco",
                         "password":"somePassword",
                         "birthplace":"Shenzhen, China"
                     }|]
                     `shouldRespondWith` 409
+
+            it "responds with 409 if trying to create a user with an existing email (case insensitive)" $ do
+                postJSON "/api/users" 
+                    [json|{
+                        "email":"NENA@Alpaca.Net",
+                        "birthday":"2017-02-14T00:00:00Z",
+                        "gender":"Male",
+                        "username":"Paco Alpaco",
+                        "password":"somePassword",
+                        "birthplace":"Shenzhen, China"
+                    }|]
+                    `shouldRespondWith` 409                    
+
+            it "responds with 409 if trying to create a user with an existing username (case insensitive)" $ do
+                postJSON "/api/users" 
+                    [json|{
+                        "email":"new@alpaca.Net",
+                        "birthday":"2017-02-14T00:00:00Z",
+                        "gender":"Male",
+                        "username":"CHARLIE ALPACA",
+                        "password":"somePassword",
+                        "birthplace":"Shenzhen, China"
+                    }|]
+                    `shouldRespondWith` 409                    
             
             it "responds with 201 when creating a new user" $ do
                 postJSON "/api/users" 
@@ -187,18 +218,18 @@ spec =
                         "email":"paco.new@alpaca.net",
                         "birthday":"2017-02-14T00:00:00Z",
                         "gender":"Male",
-                        "name":"Paco Alpaco",
+                        "username":"Paco Alpaco",
                         "password":"somePassword",
                         "birthplace":"Shenzhen, China"
                     }|]
                     `shouldRespondWith` 201
 
-        describe "GET /api/user/dreams" $ do
+        describe "GET /api/dreams?mine" $ do
             it "responds with 401 if no user is signed in" $ do
-                get "/api/user/dreams" `shouldRespondWith` 401
+                get "/api/dreams?mine" `shouldRespondWith` 401
             
             it "responds with the current user's dreams, private and public, when authenticated" $ do
-                authenticatedGet "/api/user/dreams" currentUserToken ""
+                authenticatedGet "/api/dreams?mine" currentUserToken ""
                     `shouldRespondWith` [json|[
                         {"nightmare":false,
                         "lucid":false,
@@ -210,7 +241,11 @@ spec =
                         "dreamer_id":1,
                         "dream_id":2,
                         "title":"Nena's secret dream",
-                        "description":"Nena dreams"},
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"},
                         {"nightmare":false,
                         "lucid":false,
                         "private":false,
@@ -221,7 +256,11 @@ spec =
                         "dreamer_id":1,
                         "dream_id":1,
                         "title":"Nena's dream",
-                        "description":"Nena dreams"
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
 
         describe "POST /api/user/dreams" $ do
@@ -286,9 +325,9 @@ spec =
                 authenticatedDelete "/api/user/dreams/5" pacoUserToken ""
                     `shouldRespondWith` 204
 
-        describe "GET /api/users/:userId/dreams" $ do
+        describe "GET /api/dreams?username=Another%20Nena" $ do
             it "responds with all dreams, public and private, if the current user is the owner" $ do
-                authenticatedGet "/api/users/1/dreams" currentUserToken ""
+                authenticatedGet "/api/dreams?username=Another%20Nena" currentUserToken ""
                     `shouldRespondWith` [json|[
                         {"nightmare":false,
                         "lucid":false,
@@ -300,7 +339,11 @@ spec =
                         "dreamer_id":1,
                         "dream_id":2,
                         "title":"Nena's secret dream",
-                        "description":"Nena dreams"},
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"},
                         {"nightmare":false,
                         "lucid":false,
                         "private":false,
@@ -311,11 +354,15 @@ spec =
                         "dreamer_id":1,
                         "dream_id":1,
                         "title":"Nena's dream",
-                        "description":"Nena dreams"
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
 
             it "responds with public dreams when the current user is someone else" $ do
-                authenticatedGet "/api/users/1/dreams" charlieUserToken ""
+                authenticatedGet "/api/dreams?username=Another%20Nena" charlieUserToken ""
                     `shouldRespondWith` [json|[
                         {"nightmare":false,
                         "lucid":false,
@@ -327,11 +374,15 @@ spec =
                         "dreamer_id":1,
                         "dream_id":1,
                         "title":"Nena's dream",
-                        "description":"Nena dreams"
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
 
             it "responds with public dreams when there's no current user" $ do
-                get "/api/users/1/dreams"
+                get "/api/dreams?username=Another%20Nena"
                     `shouldRespondWith` [json|[
                         {"nightmare":false,
                         "lucid":false,
@@ -343,7 +394,11 @@ spec =
                         "dreamer_id":1,
                         "dream_id":1,
                         "title":"Nena's dream",
-                        "description":"Nena dreams"
+                        "description":"Nena dreams",
+                        "dreamer_username": "Another Nena",
+                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_zodiac_sign": "Cancer",
+                        "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
 
         where

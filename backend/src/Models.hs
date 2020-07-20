@@ -19,7 +19,7 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import           RIO.Time                       ( UTCTime )
-import           Database.Persist.Postgresql    ( Key
+import           Database.Persist.Postgresql    (addMigration,  Key
                                                 , Entity(..)
                                                 , SqlPersistT
                                                 , rawExecute
@@ -39,19 +39,23 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as E
 import           Database.Esqueleto.PostgreSQL.JSON
                                                 ( JSONB )
 import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
+import qualified Migrations as M
+import Util (zeroTime)
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
     UserAccount
-        email Text
+        email Email
         password (PasswordHash Argon2)
-        name Text
-        gender Gender
+        username Username
+        gender Gender Maybe
         birthday UTCTime Maybe
-        birthplace Text Maybe
-        createdAt UTCTime Maybe default=now()
-        updatedAt UTCTime Maybe default=now()
+        location Text Maybe
+        zodiacSign ZodiacSign Maybe
+        createdAt UTCTime default=now()
+        updatedAt UTCTime default=now()
         UniqueEmail email
+        UniqueUsername username
         deriving Show
 
     Dream
@@ -76,16 +80,28 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 -- https://github.com/yesodweb/persistent/pull/181/files (not used, but interesting)
 -- https://artyom.me/aeson
 instance ToJSON UserAccount where
-    toJSON e = object
-        [ "email" .= userAccountEmail e
-        , "name" .= userAccountName e
-        , "gender" .= userAccountGender e
-        , "birthday" .= userAccountBirthday e
-        , "birthplace" .= userAccountBirthplace e
+    toJSON UserAccount{..} = object
+        [ "email" .= userAccountEmail
+        , "username" .= userAccountUsername
+        , "gender" .= userAccountGender
+        , "birthday" .= userAccountBirthday
+        , "location" .= userAccountLocation
+        , "zodiac_sign" .= userAccountZodiacSign
+        -- TODO(luis) maybe surface created_at?
         ]
 
+-- all migrations added with `addMigration` should be idempotent, if not, mark them as unsafe
+-- by flipping the first parameter to `False`.
+-- See:
+-- https://github.com/yesodweb/persistent/issues/919#issuecomment-504693703
+-- https://hackage.haskell.org/package/persistent-2.10.0/docs/Database-Persist-Sql.html#g:1
 runMigrations :: ReaderT SqlBackend IO ()
-runMigrations = runMigration migrateAll
+runMigrations = runMigration $ do
+    addMigration True M.enableCitext 
+    migrateAll
+    addMigration True M.addTimestampFunctions
+    addMigration True M.addUserTriggers
+    addMigration True M.addDreamTriggers
 
 runDB
     :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
@@ -134,10 +150,14 @@ data DreamFilters = DreamFilters
     , filterRecurring :: Maybe Bool
     , filterEmotions :: Maybe [EmotionLabel]
     , filterKeyword :: Maybe Text
-    , filterBirthplace :: Maybe Text
+    -- user properties
+    , filterLocation :: Maybe Text
     , filterGender :: Maybe Gender
+    , filterZodiacSign :: Maybe ZodiacSign
+    -- range properties
     , filterBefore :: Maybe UTCTime
     , filterAfter :: Maybe UTCTime  
+    -- pagination properties
     , filterLimit :: Maybe Int64
     , filterLastSeenId :: Maybe (Key Dream)
     } deriving (Eq, Show, Generic)
@@ -157,6 +177,7 @@ instance ToSample DreamFilters where
                                         Nothing
                                         Nothing
                                         Nothing
+                                        Nothing
                                         (Just 200)
                                         Nothing
 
@@ -173,15 +194,17 @@ noDreamFilters = DreamFilters
     Nothing
     Nothing
     Nothing
+    Nothing
 
 filteredDreams
     :: (MonadIO m)
     => DreamFilters
     -> (Maybe (Key UserAccount, Bool))
-    -> ReaderT SqlBackend m [Entity Dream]
+    -> ReaderT SqlBackend m [(Entity Dream, Entity UserAccount)]
 filteredDreams DreamFilters{..} userConditions = do
     let maybeNoConditions = maybe (return ())
     E.select . E.from $ \(dream `E.InnerJoin` userAccount) -> do
+        -- Ownership filters
         E.on (userAccount E.^. UserAccountId E.==. dream E.^. DreamUserId)
         maybe
             -- if no user conditions, simply look through public dreams
@@ -205,8 +228,8 @@ filteredDreams DreamFilters{..} userConditions = do
                     )
             )
             userConditions
-        -- fun with optional filters!
         -- inspired by: https://gist.github.com/bitemyapp/89c5e0663bddc3b1c78f5e3fa33e7dc4#file-companiescount-hs-L79
+        -- Dream Filters
         maybeNoConditions (\l -> E.where_ (dream E.^. DreamIsLucid     E.==. E.val l)) filterLucid
         maybeNoConditions (\n -> E.where_ (dream E.^. DreamIsNightmare E.==. E.val n)) filterNightmare
         maybeNoConditions (\r -> E.where_ (dream E.^. DreamIsRecurring E.==. E.val r)) filterRecurring
@@ -222,10 +245,11 @@ filteredDreams DreamFilters{..} userConditions = do
                     (webTsQuery $ E.val kw)
             )
             filterKeyword
-        -- TODO: remove "birthplace", use userLocation. Also, introduce that. 
-        maybeNoConditions (\b -> E.where_ (userAccount E.^. UserAccountBirthplace E.==. (E.just $ E.val b))) filterBirthplace
-        -- TODO: make Gender optional!
-        maybeNoConditions (\g -> E.where_ (userAccount E.^. UserAccountGender E.==. E.val g)) filterGender
+        -- User Account filters
+        maybeNoConditions (\b -> E.where_ (userAccount E.^. UserAccountLocation E.==. (E.just $ E.val b))) filterLocation
+        maybeNoConditions (\g -> E.where_ (userAccount E.^. UserAccountGender E.==. (E.just $ E.val g))) filterGender
+        maybeNoConditions (\z -> E.where_ (userAccount E.^. UserAccountZodiacSign E.==. (E.just $ E.val z))) filterZodiacSign
+        -- Ranges
         maybeNoConditions (\before -> E.where_ (dream E.^. DreamDreamedAt E.<=. E.val before)) filterBefore
         maybeNoConditions (\after -> E.where_ (dream E.^. DreamDreamedAt  E.>=. E.val after)) filterAfter
         -- keyset pagination
@@ -233,13 +257,13 @@ filteredDreams DreamFilters{..} userConditions = do
         -- default page size is 200, max is 1000.
         E.limit $ maybe 200 (\l-> if l > 1000 then 1000 else l) filterLimit
         E.orderBy [ E.desc (dream E.^. DreamId) ]
-        return dream
+        return (dream, userAccount)
 
 userDreams
     :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
     => Key UserAccount
     -> Bool
-    -> m [Entity Dream]
+    -> m [(Entity Dream, Entity UserAccount)]
 userDreams u o = runDB $ filteredDreams noDreamFilters $ Just (u, o)
 
 
@@ -249,12 +273,13 @@ userDreams u o = runDB $ filteredDreams noDreamFilters $ Just (u, o)
 sampleUser :: UserAccount
 sampleUser = UserAccount "nena@alpaca.com"
                          (PasswordHash "secureAlpacaPassword")
-                         "Nena Alpaca"
-                         Female
+                         "nena.alpaca"
+                         (Just Female)
                          Nothing
                          (Just "Tokyo, Japan")
-                         Nothing
-                         Nothing
+                         (Just Scorpio)
+                         zeroTime
+                         zeroTime
 
 instance ToSample UserAccount where
     toSamples _ = singleSample sampleUser

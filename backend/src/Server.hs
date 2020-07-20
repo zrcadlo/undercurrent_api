@@ -6,6 +6,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+-- I'm sorry Hubert
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 
 module Server where
 
@@ -15,14 +18,15 @@ import Data.Password (Password)
 import Data.Password.Argon2 (checkPassword, hashPassword)
 import Data.Password.Instances ()
 import Database.Esqueleto.PostgreSQL.JSON (JSONB (..))
-import Database.Persist.Postgresql ((=.), Entity (..), delete, fromSqlKey, get, getBy, insertEntity, insertUnique, toSqlKey, update)
+import Database.Persist.Postgresql (getEntity, insertBy, (=.), Entity (..), delete, fromSqlKey, get, getBy, insertEntity, toSqlKey, update)
 import Import
 import Models
 import Network.HTTP.Types (status200)
 import Network.Wai
 import RIO.ByteString.Lazy (fromStrict, toStrict)
+import qualified RIO.ByteString.Lazy as BL
 import RIO.Text as T (pack)
-import RIO.Time (UTCTime (..), fromGregorian, getCurrentTime)
+import RIO.Time (UTCTime (..), fromGregorian)
 import RIO.Partial (fromJust)
 import Servant
 import Servant.Auth.Docs ()
@@ -32,11 +36,12 @@ import Util
 
 -- | "Resource" types
 data NewUserAccount = NewUserAccount
-  { name :: Text,
-    email :: Text,
-    gender :: Gender,
+  { username :: Username,
+    email :: Email,
+    gender :: Maybe Gender,
     birthday :: Maybe UTCTime,
-    birthplace :: Maybe Text,
+    location :: Maybe Text,
+    zodiacSign :: Maybe ZodiacSign,
     password :: Password
   }
   deriving (Show, Generic)
@@ -46,11 +51,12 @@ instance FromJSON NewUserAccount
 instance ToJSON NewUserAccount where
   toJSON NewUserAccount {..} =
     object
-      [ "name" .= name,
+      [ "username" .= username,
         "email" .= email,
         "gender" .= gender,
         "birthday" .= birthday,
-        "birthplace" .= birthplace,
+        "location" .= location,
+        "zodiac_sign" .= zodiacSign,
         "password" .= ("somePassword" :: Text)
       ]
 
@@ -58,19 +64,21 @@ instance ToSample NewUserAccount where
   toSamples _ =
     singleSample $
       NewUserAccount
-        "Paco Alpaco"
+        "Paco.Alpaco"
         "paco@alpaca.net"
-        Male
+        (Just Male)
         (Just (UTCTime (fromGregorian 2017 2 14) 0))
         (Just "Shenzhen, China")
+        (Just Capricorn)
         "secureAlpacaPassword"
 
 data UpdateUserAccount = UpdateUserAccount
-  { updateName :: Maybe Text,
-    updateEmail :: Maybe Text,
+  { updateUsername :: Maybe Username,
+    updateEmail :: Maybe Email,
     updateGender :: Maybe Gender,
     updateBirthday :: Maybe UTCTime,
-    updateBirthplace :: Maybe Text
+    updateLocation :: Maybe Text,
+    updateZodiacSign :: Maybe ZodiacSign
   }
   deriving (Show, Generic)
 
@@ -84,9 +92,10 @@ instance ToSample UpdateUserAccount where
   toSamples _ =
     singleSample $
       UpdateUserAccount
-        (Just "New Alpaca Name")
+        (Just "New.Alpaca.Name")
         (Just "new.email@alpaca.net")
         (Just NonBinary)
+        Nothing
         Nothing
         Nothing
 
@@ -124,10 +133,9 @@ data AuthenticatedUser = AuthenticatedUser
 
 
 instance ToJSON AuthenticatedUser
+instance FromJSON AuthenticatedUser
 
 instance ToJWT AuthenticatedUser
-
-instance FromJSON AuthenticatedUser
 instance FromJWT AuthenticatedUser
 
 instance ToSample AuthenticatedUser where
@@ -138,8 +146,7 @@ data NewDream = NewDream
     date :: UTCTime,
     description :: Text,
     emotions :: [EmotionLabel],
- 
-   lucid :: Bool,
+    lucid :: Bool,
     nightmare :: Bool,
     recurring :: Bool,
     private :: Bool,
@@ -161,11 +168,10 @@ instance ToSample NewDream where
         False
         False
         True
-
         False
         True
 
-data DreamWithKeys = DreamWithKeys
+data DreamWithUserInfo = DreamWithUserInfo
   { dkTitle :: Text,
     dkDate :: UTCTime,
     dkDescription :: Text,
@@ -176,19 +182,23 @@ data DreamWithKeys = DreamWithKeys
     dkPrivate :: Bool,
     dkStarred :: Bool,
     dkDreamerId :: Key UserAccount,
-    dkDreamId :: Key Dream
+    dkDreamId :: Key Dream,
+    dkDreamerUsername :: Username,
+    dkDreamerLocation :: Maybe Text,
+    dkDreamerGender :: Maybe Gender,
+    dkDreamerZodiacSign :: Maybe ZodiacSign
   }
   deriving (Eq, Show, Generic)
 
-instance FromJSON DreamWithKeys where
+instance FromJSON DreamWithUserInfo where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = dropPrefix "dk"}
 
-instance ToJSON DreamWithKeys where
+instance ToJSON DreamWithUserInfo where
   toJSON = genericToJSON defaultOptions {fieldLabelModifier = dropPrefix "dk"}
 
-dreamWithKeys :: (Entity Dream) -> DreamWithKeys
-dreamWithKeys (Entity dreamId Dream {..}) =
-  DreamWithKeys
+dreamWithKeys :: (Entity Dream, Entity UserAccount) -> DreamWithUserInfo
+dreamWithKeys (Entity dreamId Dream {..}, Entity _ UserAccount {..}) =
+  DreamWithUserInfo
     { dkTitle = dreamTitle,
       dkDate = dreamDreamedAt,
       dkDescription = dreamDescription,
@@ -199,15 +209,19 @@ dreamWithKeys (Entity dreamId Dream {..}) =
       dkPrivate = dreamIsPrivate,
       dkStarred = dreamIsStarred,
       dkDreamerId = dreamUserId,
-      dkDreamId = dreamId
+      dkDreamId = dreamId,
+      dkDreamerUsername = userAccountUsername,
+      dkDreamerLocation = userAccountLocation,
+      dkDreamerGender = userAccountGender,
+      dkDreamerZodiacSign = userAccountZodiacSign
     }
 
-instance ToSample DreamWithKeys where
+instance ToSample DreamWithUserInfo where
   toSamples _ =
-    [("A dream with the dream id and dreamer id included", sampleDreamWithKeys)]
+    [("A dream with the dream id and dreamer id included", sampleDreamWithUserInfo)]
     where
-      sampleDreamWithKeys =
-        DreamWithKeys
+      sampleDreamWithUserInfo =
+        DreamWithUserInfo
           "I dreamed of our alpacas"
           zeroTime
           "Some alpacas were wearing sunglasses"
@@ -219,6 +233,11 @@ instance ToSample DreamWithKeys where
           True
           (toSqlKey 42)
           (toSqlKey 42)
+          "alpaca.cool69420"
+          (Just "Queens")
+          (Just Female)
+          (Just Scorpio)
+
 
 data DreamUpdate = DreamUpdate
   { updateTitle :: Maybe Text,
@@ -256,7 +275,7 @@ instance ToSample DreamUpdate where
           (Just False)
 
 data Login = Login
-  { loginEmail :: Text,
+  { loginEmail :: Email,
     loginPassword :: Password
   }
   deriving (Show, Generic)
@@ -298,28 +317,105 @@ instance ToSample UserSession where
 instance ToCapture (Capture "dreamId" Int64) where
   toCapture _ = DocCapture "dreamId" "ID of the dream to update, as returned when creating it."
 
--- TODO: need an "external id"??
-instance ToCapture (Capture "userId" Int64) where
-  toCapture _ = DocCapture "userId" "ID of the user to inspect, as returned when creating it."
+spiel :: String
+spiel = " (if not provided, won't affect the filtering.)"
+anyFlag :: [String]
+anyFlag = ["true", "false"]
+
+instance ToParam (QueryParam "lucid" Bool) where
+  toParam _ =
+    DocQueryParam "lucid" anyFlag ("Filter by: is lucid or not " <> spiel) Normal
+
+instance ToParam (QueryParam "nightmare" Bool) where
+  toParam _ =
+    DocQueryParam "nightmare" anyFlag ("Filter by: is nightmare or not" <> spiel) Normal
+
+instance ToParam (QueryParam "recurring" Bool) where
+  toParam _ =
+    DocQueryParam "recurring" anyFlag ("Filter by: is recurring or not" <> spiel) Normal
+
+instance ToParam (QueryParams "emotions" EmotionLabel) where
+  toParam _ =
+    DocQueryParam "emotions" ["joy"] ("Filter by emotions: requires a list, will return dreams that have all the given emotions" <> spiel) List
+
+instance ToParam (QueryParam "location" Text) where
+  toParam _ =
+    DocQueryParam "location" ["Queens"] ("Filter by location" <> spiel) Normal
+
+instance ToParam (QueryParam "keywords" Text) where
+  toParam _ =
+    DocQueryParam "keywords" ["some cats are scary"] ("Filter by keyword, free text search." <> spiel) Normal
+
+instance ToParam (QueryParam "gender" Gender) where
+  toParam _ =
+    DocQueryParam "gender" ["male", "female", "nonBinary"] ("Filter by dreamer's gender" <> spiel) Normal
+
+instance ToParam (QueryParam "zodiac_sign" ZodiacSign) where
+  toParam _ =
+    DocQueryParam "zodiac_sign" ["capricorn", "sagittarius", "..."] ("Filter by dreamer's zodiac sign" <> spiel) Normal
+
+instance ToParam (QueryParam "before" UTCTime) where
+  toParam _ =
+    DocQueryParam "before" ["2017-02-14T00:00:00Z"] ("Filter by dreamed at date: will returns any dreams before the given\
+    \ date, inclusive." <> spiel) Normal
+
+instance ToParam (QueryParam "after" UTCTime) where
+  toParam _ =
+    DocQueryParam "after" ["2017-02-14T00:00:00Z"] ("Filter by dreamed at date: will returns any dreams after the given\
+    \ date, inclusive." <> spiel) Normal
+
+instance ToParam (QueryParam "limit" Int64) where
+  toParam _ =
+    DocQueryParam "limit" ["101", "2", "..."] ("Limit the number of results. Defaults to 100 if not provided.") Normal
+
+instance ToParam (QueryParam "last_seen_id" (Key Dream)) where
+  toParam _ =
+    DocQueryParam "last_seen_id" ["42"] ("The id of the last dream seen, for pagination. Omit for the first page.") Normal
+
+instance ToParam (QueryParam "username" Username) where
+  toParam _ =
+    DocQueryParam "username" ["nena.alpaca"] ("A username. Checks existence. If you provide your own, we'll search private dreams too. If none is provide, search all public dreams.") Normal
+
+instance ToParam (QueryFlag "mine") where
+  toParam _ =
+    DocQueryParam "mine" [] ("If specified, will only search the current user's dreams. Because this is a flag, you can call it like this: /api/dreams?mine") Flag
 
 -- | API types
 -- inspired by: https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
+
 type Protected =
   "api" :> "user" :> Get '[JSON] UserAccount
     :<|> "api" :> "user" :> ReqBody '[JSON] UpdateUserAccount :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "password" :> ReqBody '[JSON] UpdatePassword :> Verb 'PUT 204 '[JSON] NoContent
-    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] NewDream :> PostCreated '[JSON] DreamWithKeys
+    :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] NewDream :> PostCreated '[JSON] DreamWithUserInfo
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> ReqBody '[JSON] DreamUpdate :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> Verb 'DELETE 204 '[JSON] NoContent
-    :<|> "api" :> "user" :> "dreams" :> Get '[JSON] [DreamWithKeys]
 
 type Unprotected =
   "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
     :<|> "api" :> "login" :> ReqBody '[JSON] Login :> PostCreated '[JSON] UserSession
 
--- TODO(luis) add a limit/pagination
 type KindaProtected =
-  "api" :> "users" :> Capture "userId" Int64 :> "dreams" :> Get '[JSON] [DreamWithKeys]
+  "api" :> "dreams" :> 
+    -- user filters
+    QueryFlag "mine" :>
+    QueryParam "username" Username :>
+    QueryParam "location" Text :>
+    QueryParam "gender" Gender :>
+    QueryParam "zodiac_sign" ZodiacSign :>
+    -- dream filters
+    QueryParam "lucid" Bool :>
+    QueryParam "nightmare" Bool :>
+    QueryParam "recurring" Bool :>
+    QueryParams "emotions" EmotionLabel :>
+    QueryParam "keywords" Text :>
+    -- date ranges
+    QueryParam "before" UTCTime :>
+    QueryParam "after" UTCTime :>
+    -- pagination (TODO(luis) add first_seen_id for backwards pagination?)
+    QueryParam "limit" Int64 :>
+    QueryParam "last_seen_id" (Key Dream) :> Get '[JSON] [DreamWithUserInfo]
+
 
 type Static =
   "docs" :> Raw
@@ -341,11 +437,11 @@ protected (Authenticated authUser) =
     :<|> (createDream authUser)
     :<|> (updateDream authUser)
     :<|> (deleteDream authUser)
-    :<|> (myDreams authUser)
+
 protected _ = throwAll err401
 
 kindaProtected :: AuthResult AuthenticatedUser -> ServerT KindaProtected AppM
-kindaProtected authResult = allUserDreams authResult
+kindaProtected authResult = searchDreams authResult
 
 unprotected :: CookieSettings -> JWTSettings -> ServerT Unprotected AppM
 unprotected cs jwts = createUser cs jwts :<|> login cs jwts
@@ -362,18 +458,17 @@ currentUser AuthenticatedUser {..} = do
 updateUser :: AuthenticatedUser -> UpdateUserAccount -> AppM NoContent
 updateUser (AuthenticatedUser auId) UpdateUserAccount {..} = do
   maybeUser <- (runDB $ get $ ((toSqlKey (userId auId)) :: Key UserAccount))
-  now <- getCurrentTime
   case maybeUser of
     Nothing -> throwError $ err404 {errBody = "User not found."}
     Just _ -> do
       let updates =
             catMaybes $
-              [ maybe Nothing (Just . (UserAccountName =.)) updateName,
+              [ maybe Nothing (Just . (UserAccountUsername =.)) updateUsername,
                 maybe Nothing (Just . (UserAccountEmail =.)) updateEmail,
-                maybe Nothing (Just . (UserAccountGender =.)) updateGender,
+                maybe Nothing (Just . (\x -> UserAccountGender =. Just x)) updateGender,
                 maybe Nothing (Just . (\x -> UserAccountBirthday =. Just x)) updateBirthday,
-                maybe Nothing (Just . (\x -> UserAccountBirthplace =. Just x)) updateBirthplace,
-                Just $ UserAccountUpdatedAt =. Just now
+                maybe Nothing (Just . (\x -> UserAccountLocation =. Just x)) updateLocation,
+                maybe Nothing (Just . (\x -> UserAccountZodiacSign =. Just x)) updateZodiacSign
               ]
        in runDB $ update (toSqlKey $ userId auId) updates
       return NoContent
@@ -381,7 +476,6 @@ updateUser (AuthenticatedUser auId) UpdateUserAccount {..} = do
 updatePassword :: AuthenticatedUser -> UpdatePassword -> AppM NoContent
 updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
   maybeUser <- (runDB $ get $ ((toSqlKey (userId auId)) :: Key UserAccount))
-  now <- getCurrentTime
   case maybeUser of
     Nothing -> throwError $ err404 {errBody = "User not found."}
     Just user -> do
@@ -389,14 +483,15 @@ updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
         PasswordCheckFail -> throwError $ err403 {errBody = "Unable to update password"}
         PasswordCheckSuccess -> do
           pwHash <- hashPassword newPassword
-          runDB $ update (toSqlKey (userId auId)) [UserAccountPassword =. pwHash, UserAccountUpdatedAt =. Just now]
+          runDB $ update (toSqlKey (userId auId)) [UserAccountPassword =. pwHash]
           return NoContent
 
-createDream :: AuthenticatedUser -> NewDream -> AppM DreamWithKeys
+createDream :: AuthenticatedUser -> NewDream -> AppM DreamWithUserInfo
 createDream (AuthenticatedUser auId) NewDream {..} = do
-  let dbDream =
+  let userKey = toSqlKey $ userId auId :: Key UserAccount
+      dbDream =
         Dream
-          (toSqlKey $ userId $ auId)
+          userKey
           title
           description
           lucid
@@ -409,8 +504,12 @@ createDream (AuthenticatedUser auId) NewDream {..} = do
           zeroTime
           zeroTime
 
-  dreamEntity <- runDB $ insertEntity dbDream
-  return $ dreamWithKeys dreamEntity
+  me <- runDB $ getEntity userKey
+  case me of
+    Nothing -> throwError $ err404 {errBody = "Seems like I lost myself in my dreams!"}
+    Just userEntity -> do
+      dreamEntity <- runDB $ insertEntity dbDream
+      return $ dreamWithKeys (dreamEntity, userEntity)
 
 updateDream :: AuthenticatedUser -> Int64 -> DreamUpdate -> AppM NoContent
 updateDream (AuthenticatedUser auId) dreamId updates = do
@@ -436,23 +535,30 @@ deleteDream (AuthenticatedUser auId) dreamId = do
         then runDB (delete dreamKey) >> return NoContent
         else throwError $ err403 {errBody = "This is not your dream."}
 
--- TODO: do we need pagination and filtering here?
-myDreams :: AuthenticatedUser -> AppM [DreamWithKeys]
-myDreams (AuthenticatedUser auId) = do
-  let userKey = toSqlKey $ userId auId :: Key UserAccount
-  allMyDreams <- userDreams userKey True
-  return $ map dreamWithKeys allMyDreams
-
 -- Unprotected handlers
 
 createUser :: CookieSettings -> JWTSettings -> NewUserAccount -> AppM UserSession
 createUser _ jwts NewUserAccount {..} = do
   hashedPw <- hashPassword password
-  now <- getCurrentTime
-  maybeNewUserId <- runDB $ insertUnique $ UserAccount email hashedPw name gender birthday birthplace (Just now) (Just now)
+  let newUser = UserAccount email
+                  hashedPw
+                  username
+                  gender
+                  birthday
+                  location
+                  zodiacSign
+                  zeroTime -- createdAt is set by a database trigger, so we use a bogus timestamp.
+                  zeroTime -- updatedAt is also set by a db trigger.
+  maybeNewUserId <- runDB $ insertBy newUser
   case maybeNewUserId of
-    Nothing -> throwError $ err409 {errBody = "Unable to create user: duplicate email."}
-    Just newUserId -> sessionWithUser jwts newUserId
+    Left (Entity _ existingUser) -> throwError $ err409 {errBody = uniqueUserError newUser existingUser}
+    Right newUserId -> sessionWithUser jwts newUserId
+
+uniqueUserError :: UserAccount -> UserAccount -> BL.ByteString
+uniqueUserError newUser existingUser
+  | (userAccountUsername newUser) == (userAccountUsername existingUser) = "Unable to create user: username is already taken."
+  | (userAccountEmail    newUser) == (userAccountEmail existingUser) = "Unable to create user: email is already taken."
+  | otherwise = "Unable to create user: duplicate user"
 
 login :: CookieSettings -> JWTSettings -> Login -> AppM UserSession
 login _ jwts Login {..} = do
@@ -466,15 +572,100 @@ login _ jwts Login {..} = do
 
 -- Handlers that check their own authentication
 
--- TODO: do we need to apply filters here, too?
-allUserDreams :: AuthResult AuthenticatedUser -> Int64 -> AppM [DreamWithKeys]
-allUserDreams authResult requestedId = do
-  let requestedUserId = toSqlKey requestedId :: Key UserAccount
-  let isOwner = case authResult of
-        Authenticated (AuthenticatedUser auId) -> (toSqlKey $ userId $ auId) == requestedUserId
-        _ -> False
-  requestedDreams <- userDreams requestedUserId isOwner
-  return $ map dreamWithKeys requestedDreams
+privateDreamsFor :: (Key UserAccount) -> Maybe (Key UserAccount, Bool)
+privateDreamsFor u = Just (u, True)
+
+publicDreamsFor :: (Key UserAccount) -> Maybe (Key UserAccount, Bool)
+publicDreamsFor u = Just (u, False) 
+
+searchDreams :: AuthResult AuthenticatedUser
+  -> Bool -- only mine?
+  -> Maybe Username
+  -> Maybe Text -- location
+  -> Maybe Gender
+  -> Maybe ZodiacSign
+  -> Maybe Bool -- lucid
+  -> Maybe Bool -- nightmare
+  -> Maybe Bool -- recurring
+  -> [EmotionLabel] 
+  -> Maybe Text -- keywords
+  -> Maybe UTCTime
+  -> Maybe UTCTime
+  -> Maybe Int64
+  -> Maybe (Key Dream)
+  -> AppM [DreamWithUserInfo]
+
+-- if the "mine" flag is specified, search only my dreams. Convenience to not have to provide my own username.
+searchDreams (Authenticated user) True _ t g z l n r es k b a lt ls =
+  let currentUserId = toSqlKey $ userId $ auId user
+  in
+    searchDreams' (privateDreamsFor currentUserId) t g z l n r es k b a lt ls
+
+-- asking for "mine," but there is no me.
+searchDreams _ True _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  throwError $ err401 {errBody= "Need to be signed in to search your own dreams!"}
+
+-- not searching by username: we're just searching public dreams for everyone.
+searchDreams _ _ Nothing t g z l n r es k b a lt ls =
+  searchDreams' Nothing t g z l n r es k b a lt ls
+
+-- searching a user's dreams: if I provide my own username, search my dreams. If I provide someone else's,
+-- search their _public_ dreams.
+-- TODO(luis) maybe this should behave exactly as the non-authenticated version? Even if I provide
+-- my own username, only search my public dreams? It's easy to update, just delete this match!
+searchDreams (Authenticated user) _ (Just username) t g z l n r es k b a lt ls = do
+  requestedUser <- runDB $ getBy $ UniqueUsername username
+  let currentUserId = toSqlKey $ userId $ auId user
+  case requestedUser of
+    Nothing -> throwError $ err404 {errBody =  "The requested user is not a known dreamer."}
+    Just (Entity requestedUserId _) -> 
+      if (currentUserId == requestedUserId) then
+        searchDreams' (privateDreamsFor requestedUserId) t g z l n r es k b a lt ls
+      else
+        searchDreams' (publicDreamsFor requestedUserId) t g z l n r es k b a lt ls
+
+-- not authenticated (or failed authentication,) but searching a specific user's dreams:
+-- always search as a non-owner
+searchDreams _ _ (Just username) t g z l n r es k b a lt ls = do
+  requestedUser <- runDB $ getBy $ UniqueUsername username
+  case requestedUser of
+    Nothing -> throwError $ err404 {errBody = "The requested user is not a known dreamer."}
+    Just (Entity requestedUserId _) ->
+      searchDreams' (publicDreamsFor requestedUserId) t g z l n r es k b a lt ls
+
+searchDreams' :: Maybe (Key UserAccount, Bool)
+  -> Maybe Text -- location
+  -> Maybe Gender 
+  -> Maybe ZodiacSign 
+  -> Maybe Bool
+  -> Maybe Bool
+  -> Maybe Bool 
+  -> [EmotionLabel] 
+  -> Maybe Text -- keywords 
+  -> Maybe UTCTime 
+  -> Maybe UTCTime 
+  -> Maybe Int64 
+  -> Maybe (Key Dream) 
+  -> AppM [DreamWithUserInfo]
+searchDreams' userFilters location gender zodiacSign lucid nightmare recurring es keywords before after limit lastSeen = do
+  let emotions = if null es then Nothing else Just es
+      filters = DreamFilters 
+        {
+          filterLocation = location,
+          filterGender = gender,
+          filterZodiacSign = zodiacSign,
+          filterLucid = lucid,
+          filterNightmare = nightmare,
+          filterRecurring = recurring,
+          filterEmotions = emotions,
+          filterKeyword = keywords,
+          filterBefore = before,
+          filterAfter = after,
+          filterLimit = limit,
+          filterLastSeenId = lastSeen
+        }
+  dreams <- runDB $ filteredDreams filters userFilters
+  return $ map dreamWithKeys dreams
 
 -- | Handler helpers:
 sessionWithUser :: JWTSettings -> (Key UserAccount) -> AppM UserSession
