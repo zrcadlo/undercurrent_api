@@ -317,11 +317,6 @@ instance ToSample UserSession where
 instance ToCapture (Capture "dreamId" Int64) where
   toCapture _ = DocCapture "dreamId" "ID of the dream to update, as returned when creating it."
 
--- TODO: need an "external id"??
-instance ToCapture (Capture "userId" Int64) where
-  toCapture _ = DocCapture "userId" "ID of the user to inspect, as returned when creating it."
-
-
 spiel :: String
 spiel = " (if not provided, won't affect the filtering.)"
 anyFlag :: [String]
@@ -375,7 +370,12 @@ instance ToParam (QueryParam "limit" Int64) where
 
 instance ToParam (QueryParam "last_seen_id" (Key Dream)) where
   toParam _ =
-    DocQueryParam "last_seen_id" ["42"] ("The id of the last dream seen, for pagination. Omit for the first page.") Normal  
+    DocQueryParam "last_seen_id" ["42"] ("The id of the last dream seen, for pagination. Omit for the first page.") Normal
+
+instance ToParam (QueryParam "username" Username) where
+  toParam _ =
+    DocQueryParam "username" ["nena.alpaca"] ("A username. Checks existence. If you provide your own, we'll search private dreams too.") Normal
+
 -- | API types
 -- inspired by: https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
 
@@ -386,28 +386,32 @@ type Protected =
     :<|> "api" :> "user" :> "dreams" :> ReqBody '[JSON] NewDream :> PostCreated '[JSON] DreamWithUserInfo
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> ReqBody '[JSON] DreamUpdate :> Verb 'PUT 204 '[JSON] NoContent
     :<|> "api" :> "user" :> "dreams" :> Capture "dreamId" Int64 :> Verb 'DELETE 204 '[JSON] NoContent
-    :<|> "api" :> "user" :> "dreams" :> Get '[JSON] [DreamWithUserInfo]
 
 type Unprotected =
   "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
     :<|> "api" :> "login" :> ReqBody '[JSON] Login :> PostCreated '[JSON] UserSession
-    :<|> "api" :> "dreams" :> 
-      QueryParam "lucid" Bool :>
-      QueryParam "nightmare" Bool :>
-      QueryParam "recurring" Bool :>
-      QueryParams "emotions" EmotionLabel :>
-      QueryParam "keywords" Text :>
-      QueryParam "location" Text :>
-      QueryParam "gender" Gender :>
-      QueryParam "zodiac_sign" ZodiacSign :>
-      QueryParam "before" UTCTime :>
-      QueryParam "after" UTCTime :>
-      QueryParam "limit" Int64 :>
-      QueryParam "last_seen_id" (Key Dream) :> Get '[JSON] [DreamWithUserInfo]
 
--- TODO(luis) add a limit/pagination
+
 type KindaProtected =
-  "api" :> "users" :> Capture "userId" Int64 :> "dreams" :> Get '[JSON] [DreamWithUserInfo]
+  "api" :> "dreams" :> 
+    -- user filters
+    QueryParam "username" Username :>
+    QueryParam "location" Text :>
+    QueryParam "gender" Gender :>
+    QueryParam "zodiac_sign" ZodiacSign :>
+    -- dream filters
+    QueryParam "lucid" Bool :>
+    QueryParam "nightmare" Bool :>
+    QueryParam "recurring" Bool :>
+    QueryParams "emotions" EmotionLabel :>
+    QueryParam "keywords" Text :>
+    -- date ranges
+    QueryParam "before" UTCTime :>
+    QueryParam "after" UTCTime :>
+    -- pagination (TODO(luis) add first_seen_id for backwards pagination?)
+    QueryParam "limit" Int64 :>
+    QueryParam "last_seen_id" (Key Dream) :> Get '[JSON] [DreamWithUserInfo]
+
 
 type Static =
   "docs" :> Raw
@@ -429,14 +433,14 @@ protected (Authenticated authUser) =
     :<|> (createDream authUser)
     :<|> (updateDream authUser)
     :<|> (deleteDream authUser)
-    :<|> (myDreams authUser)
+
 protected _ = throwAll err401
 
 kindaProtected :: AuthResult AuthenticatedUser -> ServerT KindaProtected AppM
-kindaProtected authResult = allUserDreams authResult
+kindaProtected authResult = searchDreams authResult
 
 unprotected :: CookieSettings -> JWTSettings -> ServerT Unprotected AppM
-unprotected cs jwts = createUser cs jwts :<|> login cs jwts :<|> searchDreams cs jwts
+unprotected cs jwts = createUser cs jwts :<|> login cs jwts
 
 -- Protected handlers
 
@@ -527,13 +531,6 @@ deleteDream (AuthenticatedUser auId) dreamId = do
         then runDB (delete dreamKey) >> return NoContent
         else throwError $ err403 {errBody = "This is not your dream."}
 
--- TODO: do we need pagination and filtering here?
-myDreams :: AuthenticatedUser -> AppM [DreamWithUserInfo]
-myDreams (AuthenticatedUser auId) = do
-  let userKey = toSqlKey $ userId auId :: Key UserAccount
-  allMyDreams <- userDreams userKey True
-  return $ map dreamWithKeys allMyDreams
-
 -- Unprotected handlers
 
 createUser :: CookieSettings -> JWTSettings -> NewUserAccount -> AppM UserSession
@@ -569,38 +566,83 @@ login _ jwts Login {..} = do
         PasswordCheckFail -> throwError $ err401 {errBody = "Invalid email or password."}
         PasswordCheckSuccess -> sessionWithUser jwts userId
 
-searchDreams :: CookieSettings -> JWTSettings
+-- Handlers that check their own authentication
+
+searchDreams :: AuthResult AuthenticatedUser
+  -> Maybe Username
+  -> Maybe Text -- location
+  -> Maybe Gender
+  -> Maybe ZodiacSign
   -> Maybe Bool -- lucid
   -> Maybe Bool -- nightmare
   -> Maybe Bool -- recurring
   -> [EmotionLabel] 
   -> Maybe Text -- keywords
-  -> Maybe Text -- location
-  -> Maybe Gender
-  -> Maybe ZodiacSign
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Maybe Int64
   -> Maybe (Key Dream)
   -> AppM [DreamWithUserInfo]
-searchDreams _ _ l n r es kws loc g z before after limit lastSeen = do
+
+-- searching a user's dreams: if I provide my own username, search my dreams. If I provide someone else's,
+-- search their _public_ dreams.
+searchDreams (Authenticated (AuthenticatedUser auId)) (Just username) t g z l n r es k b a lt ls = do
+  requestedUser <- runDB $ getBy $ UniqueUsername username
+  let currentUserId = toSqlKey $ userId $ auId
+  case requestedUser of
+    Nothing -> throwError $ err404 {errBody =  "The requested user is not a known dreamer."}
+    Just (Entity requestedUserId _) -> 
+      if (currentUserId == requestedUserId) then
+        searchDreams' (Just (requestedUserId, True)) t g z l n r es k b a lt ls
+      else
+        searchDreams' (Just (requestedUserId, False)) t g z l n r es k b a lt ls
+
+-- not authenticated (or failed authentication,) but searching a specific user's dreams:
+-- always search as a non-owner
+searchDreams _ (Just username) t g z l n r es k b a lt ls = do
+  requestedUser <- runDB $ getBy $ UniqueUsername username
+  case requestedUser of
+    Nothing -> throwError $ err404 {errBody = "The requested user is not a known dreamer."}
+    Just (Entity requestedUserId _) ->
+      searchDreams' (Just (requestedUserId, False)) t g z l n r es k b a lt ls
+
+-- not searching by username: we're just searching public dreams for everyone.
+searchDreams _ Nothing t g z l n r es k b a lt ls =
+  searchDreams' Nothing t g z l n r es k b a lt ls
+
+searchDreams' :: Maybe (Key UserAccount, Bool)
+  -> Maybe Text -- location
+  -> Maybe Gender 
+  -> Maybe ZodiacSign 
+  -> Maybe Bool
+  -> Maybe Bool
+  -> Maybe Bool 
+  -> [EmotionLabel] 
+  -> Maybe Text -- keywords 
+  -> Maybe UTCTime 
+  -> Maybe UTCTime 
+  -> Maybe Int64 
+  -> Maybe (Key Dream) 
+  -> AppM [DreamWithUserInfo]
+searchDreams' userFilters location gender zodiacSign lucid nightmare recurring es keywords before after limit lastSeen = do
   let emotions = if null es then Nothing else Just es
-      filters = DreamFilters l n r emotions kws loc g z before after limit lastSeen
-  dreams <- runDB $ filteredDreams filters Nothing
+      filters = DreamFilters 
+        {
+          filterLocation = location,
+          filterGender = gender,
+          filterZodiacSign = zodiacSign,
+          filterLucid = lucid,
+          filterNightmare = nightmare,
+          filterRecurring = recurring,
+          filterEmotions = emotions,
+          filterKeyword = keywords,
+          filterBefore = before,
+          filterAfter = after,
+          filterLimit = limit,
+          filterLastSeenId = lastSeen
+        }
+  dreams <- runDB $ filteredDreams filters userFilters
   return $ map dreamWithKeys dreams
-
-
--- Handlers that check their own authentication
-
--- TODO: do we need to apply filters here, too?
-allUserDreams :: AuthResult AuthenticatedUser -> Int64 -> AppM [DreamWithUserInfo]
-allUserDreams authResult requestedId = do
-  let requestedUserId = toSqlKey requestedId :: Key UserAccount
-  let isOwner = case authResult of
-        Authenticated (AuthenticatedUser auId) -> (toSqlKey $ userId $ auId) == requestedUserId
-        _ -> False
-  requestedDreams <- userDreams requestedUserId isOwner
-  return $ map dreamWithKeys requestedDreams
 
 -- | Handler helpers:
 sessionWithUser :: JWTSettings -> (Key UserAccount) -> AppM UserSession
