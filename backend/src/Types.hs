@@ -12,7 +12,7 @@ import Database.Persist.TH (derivePersistField)
 import Data.Aeson.Types
 import Database.Persist.Postgresql (PersistFieldSql, ConnectionPool)
 import Database.Persist (PersistField)
-import RIO.Text (unpack)
+import RIO.Text (unpack, length)
 
 type Port = Int
 
@@ -92,3 +92,38 @@ mkEmotionLabel s =
     Just $ EmotionLabel s
   else
     Nothing
+
+newtype Username = Username Text
+  deriving (Show, Eq, Generic, PersistField, PersistFieldSql, IsString)
+
+mkUsername :: Text -> Either Text Username
+mkUsername u =
+  if ((RIO.Text.length u) <= 100) then
+    Right $ Username u
+  else
+    Left "Username can't be longer than 100 characters."
+
+instance ToJSON Username
+instance FromJSON Username where
+  parseJSON = withText "Username" $ \text ->
+    case (mkUsername text) of
+      Right u -> pure u
+      Left e -> fail $ unpack e
+
+data ZodiacSign =
+    Aries
+    | Taurus
+    | Gemini
+    | Cancer
+    | Leo
+    | Virgo
+    | Libra
+    | Scorpio
+    | Sagittarius
+    | Capricorn
+    | Aquarius
+    | Pisces
+    deriving (Show, Eq, Generic, Read)
+derivePersistField "ZodiacSign"
+instance FromJSON ZodiacSign
+instance ToJSON ZodiacSign

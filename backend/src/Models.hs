@@ -40,19 +40,22 @@ import           Database.Esqueleto.PostgreSQL.JSON
                                                 ( JSONB )
 import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
 import qualified Migrations as M
+import Util (zeroTime)
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
     UserAccount
-        email Text
+        email Text sqltype=citext
         password (PasswordHash Argon2)
-        name Text
-        gender Gender
+        username Username sqltype=citext
+        gender Gender Maybe
         birthday UTCTime Maybe
-        birthplace Text Maybe
-        createdAt UTCTime Maybe default=now()
-        updatedAt UTCTime Maybe default=now()
+        location Text Maybe
+        zodiacSign ZodiacSign Maybe
+        createdAt UTCTime default=now()
+        updatedAt UTCTime default=now()
         UniqueEmail email
+        UniqueUsername username
         deriving Show
 
     Dream
@@ -77,12 +80,14 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 -- https://github.com/yesodweb/persistent/pull/181/files (not used, but interesting)
 -- https://artyom.me/aeson
 instance ToJSON UserAccount where
-    toJSON e = object
-        [ "email" .= userAccountEmail e
-        , "name" .= userAccountName e
-        , "gender" .= userAccountGender e
-        , "birthday" .= userAccountBirthday e
-        , "birthplace" .= userAccountBirthplace e
+    toJSON UserAccount{..} = object
+        [ "email" .= userAccountEmail
+        , "username" .= userAccountUsername
+        , "gender" .= userAccountGender
+        , "birthday" .= userAccountBirthday
+        , "location" .= userAccountLocation
+        , "zodiac_sign" .= userAccountZodiacSign
+        -- TODO(luis) maybe surface created_at?
         ]
 
 -- all migrations added with `addMigration` should be idempotent, if not, mark them as unsafe
@@ -91,7 +96,8 @@ instance ToJSON UserAccount where
 -- https://github.com/yesodweb/persistent/issues/919#issuecomment-504693703
 -- https://hackage.haskell.org/package/persistent-2.10.0/docs/Database-Persist-Sql.html#g:1
 runMigrations :: ReaderT SqlBackend IO ()
-runMigrations = runMigration $ do 
+runMigrations = runMigration $ do
+    addMigration True M.enableCitext 
     migrateAll
     addMigration True M.addTimestampFunctions
     addMigration True M.addUserTriggers
@@ -232,10 +238,8 @@ filteredDreams DreamFilters{..} userConditions = do
                     (webTsQuery $ E.val kw)
             )
             filterKeyword
-        -- TODO: remove "birthplace", use userLocation. Also, introduce that. 
-        maybeNoConditions (\b -> E.where_ (userAccount E.^. UserAccountBirthplace E.==. (E.just $ E.val b))) filterBirthplace
-        -- TODO: make Gender optional!
-        maybeNoConditions (\g -> E.where_ (userAccount E.^. UserAccountGender E.==. E.val g)) filterGender
+        maybeNoConditions (\b -> E.where_ (userAccount E.^. UserAccountLocation E.==. (E.just $ E.val b))) filterBirthplace
+        maybeNoConditions (\g -> E.where_ (userAccount E.^. UserAccountGender E.==. (E.just $ E.val g))) filterGender
         maybeNoConditions (\before -> E.where_ (dream E.^. DreamDreamedAt E.<=. E.val before)) filterBefore
         maybeNoConditions (\after -> E.where_ (dream E.^. DreamDreamedAt  E.>=. E.val after)) filterAfter
         -- keyset pagination
@@ -259,12 +263,13 @@ userDreams u o = runDB $ filteredDreams noDreamFilters $ Just (u, o)
 sampleUser :: UserAccount
 sampleUser = UserAccount "nena@alpaca.com"
                          (PasswordHash "secureAlpacaPassword")
-                         "Nena Alpaca"
-                         Female
+                         "nena.alpaca"
+                         (Just Female)
                          Nothing
                          (Just "Tokyo, Japan")
-                         Nothing
-                         Nothing
+                         (Just Scorpio)
+                         zeroTime
+                         zeroTime
 
 instance ToSample UserAccount where
     toSamples _ = singleSample sampleUser

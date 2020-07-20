@@ -15,14 +15,15 @@ import Data.Password (Password)
 import Data.Password.Argon2 (checkPassword, hashPassword)
 import Data.Password.Instances ()
 import Database.Esqueleto.PostgreSQL.JSON (JSONB (..))
-import Database.Persist.Postgresql ((=.), Entity (..), delete, fromSqlKey, get, getBy, insertEntity, insertUnique, toSqlKey, update)
+import Database.Persist.Postgresql (insertBy, (=.), Entity (..), delete, fromSqlKey, get, getBy, insertEntity, toSqlKey, update)
 import Import
 import Models
 import Network.HTTP.Types (status200)
 import Network.Wai
 import RIO.ByteString.Lazy (fromStrict, toStrict)
+import qualified RIO.ByteString.Lazy as BL
 import RIO.Text as T (pack)
-import RIO.Time (UTCTime (..), fromGregorian, getCurrentTime)
+import RIO.Time (UTCTime (..), fromGregorian)
 import RIO.Partial (fromJust)
 import Servant
 import Servant.Auth.Docs ()
@@ -32,11 +33,12 @@ import Util
 
 -- | "Resource" types
 data NewUserAccount = NewUserAccount
-  { name :: Text,
+  { username :: Username,
     email :: Text,
-    gender :: Gender,
+    gender :: Maybe Gender,
     birthday :: Maybe UTCTime,
-    birthplace :: Maybe Text,
+    location :: Maybe Text,
+    zodiacSign :: Maybe ZodiacSign,
     password :: Password
   }
   deriving (Show, Generic)
@@ -46,11 +48,12 @@ instance FromJSON NewUserAccount
 instance ToJSON NewUserAccount where
   toJSON NewUserAccount {..} =
     object
-      [ "name" .= name,
+      [ "username" .= username,
         "email" .= email,
         "gender" .= gender,
         "birthday" .= birthday,
-        "birthplace" .= birthplace,
+        "location" .= location,
+        "zodiac_sign" .= zodiacSign,
         "password" .= ("somePassword" :: Text)
       ]
 
@@ -58,19 +61,21 @@ instance ToSample NewUserAccount where
   toSamples _ =
     singleSample $
       NewUserAccount
-        "Paco Alpaco"
+        "Paco.Alpaco"
         "paco@alpaca.net"
-        Male
+        (Just Male)
         (Just (UTCTime (fromGregorian 2017 2 14) 0))
         (Just "Shenzhen, China")
+        (Just Capricorn)
         "secureAlpacaPassword"
 
 data UpdateUserAccount = UpdateUserAccount
-  { updateName :: Maybe Text,
+  { updateUsername :: Maybe Username,
     updateEmail :: Maybe Text,
     updateGender :: Maybe Gender,
     updateBirthday :: Maybe UTCTime,
-    updateBirthplace :: Maybe Text
+    updateLocation :: Maybe Text,
+    updateZodiacSign :: Maybe ZodiacSign
   }
   deriving (Show, Generic)
 
@@ -84,9 +89,10 @@ instance ToSample UpdateUserAccount where
   toSamples _ =
     singleSample $
       UpdateUserAccount
-        (Just "New Alpaca Name")
+        (Just "New.Alpaca.Name")
         (Just "new.email@alpaca.net")
         (Just NonBinary)
+        Nothing
         Nothing
         Nothing
 
@@ -124,10 +130,9 @@ data AuthenticatedUser = AuthenticatedUser
 
 
 instance ToJSON AuthenticatedUser
+instance FromJSON AuthenticatedUser
 
 instance ToJWT AuthenticatedUser
-
-instance FromJSON AuthenticatedUser
 instance FromJWT AuthenticatedUser
 
 instance ToSample AuthenticatedUser where
@@ -138,8 +143,7 @@ data NewDream = NewDream
     date :: UTCTime,
     description :: Text,
     emotions :: [EmotionLabel],
- 
-   lucid :: Bool,
+    lucid :: Bool,
     nightmare :: Bool,
     recurring :: Bool,
     private :: Bool,
@@ -161,7 +165,6 @@ instance ToSample NewDream where
         False
         False
         True
-
         False
         True
 
@@ -362,18 +365,17 @@ currentUser AuthenticatedUser {..} = do
 updateUser :: AuthenticatedUser -> UpdateUserAccount -> AppM NoContent
 updateUser (AuthenticatedUser auId) UpdateUserAccount {..} = do
   maybeUser <- (runDB $ get $ ((toSqlKey (userId auId)) :: Key UserAccount))
-  now <- getCurrentTime
   case maybeUser of
     Nothing -> throwError $ err404 {errBody = "User not found."}
     Just _ -> do
       let updates =
             catMaybes $
-              [ maybe Nothing (Just . (UserAccountName =.)) updateName,
+              [ maybe Nothing (Just . (UserAccountUsername =.)) updateUsername,
                 maybe Nothing (Just . (UserAccountEmail =.)) updateEmail,
-                maybe Nothing (Just . (UserAccountGender =.)) updateGender,
+                maybe Nothing (Just . (\x -> UserAccountGender =. Just x)) updateGender,
                 maybe Nothing (Just . (\x -> UserAccountBirthday =. Just x)) updateBirthday,
-                maybe Nothing (Just . (\x -> UserAccountBirthplace =. Just x)) updateBirthplace,
-                Just $ UserAccountUpdatedAt =. Just now
+                maybe Nothing (Just . (\x -> UserAccountLocation =. Just x)) updateLocation,
+                maybe Nothing (Just . (\x -> UserAccountZodiacSign =. Just x)) updateZodiacSign
               ]
        in runDB $ update (toSqlKey $ userId auId) updates
       return NoContent
@@ -381,7 +383,6 @@ updateUser (AuthenticatedUser auId) UpdateUserAccount {..} = do
 updatePassword :: AuthenticatedUser -> UpdatePassword -> AppM NoContent
 updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
   maybeUser <- (runDB $ get $ ((toSqlKey (userId auId)) :: Key UserAccount))
-  now <- getCurrentTime
   case maybeUser of
     Nothing -> throwError $ err404 {errBody = "User not found."}
     Just user -> do
@@ -389,7 +390,7 @@ updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
         PasswordCheckFail -> throwError $ err403 {errBody = "Unable to update password"}
         PasswordCheckSuccess -> do
           pwHash <- hashPassword newPassword
-          runDB $ update (toSqlKey (userId auId)) [UserAccountPassword =. pwHash, UserAccountUpdatedAt =. Just now]
+          runDB $ update (toSqlKey (userId auId)) [UserAccountPassword =. pwHash]
           return NoContent
 
 createDream :: AuthenticatedUser -> NewDream -> AppM DreamWithKeys
@@ -448,11 +449,25 @@ myDreams (AuthenticatedUser auId) = do
 createUser :: CookieSettings -> JWTSettings -> NewUserAccount -> AppM UserSession
 createUser _ jwts NewUserAccount {..} = do
   hashedPw <- hashPassword password
-  now <- getCurrentTime
-  maybeNewUserId <- runDB $ insertUnique $ UserAccount email hashedPw name gender birthday birthplace (Just now) (Just now)
+  let newUser = UserAccount email
+                  hashedPw
+                  username
+                  gender
+                  birthday
+                  location
+                  zodiacSign
+                  zeroTime -- createdAt is set by a database trigger, so we use a bogus timestamp.
+                  zeroTime -- updatedAt is also set by a db trigger.
+  maybeNewUserId <- runDB $ insertBy newUser
   case maybeNewUserId of
-    Nothing -> throwError $ err409 {errBody = "Unable to create user: duplicate email."}
-    Just newUserId -> sessionWithUser jwts newUserId
+    Left (Entity _ existingUser) -> throwError $ err409 {errBody = uniqueUserError newUser existingUser}
+    Right newUserId -> sessionWithUser jwts newUserId
+
+uniqueUserError :: UserAccount -> UserAccount -> BL.ByteString
+uniqueUserError newUser existingUser
+  | (userAccountUsername newUser) == (userAccountUsername existingUser) = "Unable to create user: username is already taken."
+  | (userAccountEmail    newUser) == (userAccountEmail existingUser) = "Unable to create user: email is already taken."
+  | otherwise = "Unable to create user: duplicate user"
 
 login :: CookieSettings -> JWTSettings -> Login -> AppM UserSession
 login _ jwts Login {..} = do

@@ -8,12 +8,13 @@ import Import
 import Test.Hspec
 import Models
 import Control.Monad.Logger (MonadLogger, NoLoggingT(runNoLoggingT))
-import Database.Persist.Postgresql (insert_, toSqlKey, getBy, Entity(..), insert, transactionUndo, runMigration, SqlBackend, runSqlConn, withPostgresqlConn, ConnectionString)
+import Database.Persist.Postgresql (runMigrationUnsafe, addMigration, insert_, toSqlKey, getBy, Entity(..), insert, transactionUndo, runMigration, SqlBackend, runSqlConn, withPostgresqlConn, ConnectionString)
 import Data.Password.Argon2 (hashPassword)
 import RIO.Time (fromGregorian, UTCTime(..))
 import Util (zeroTime)
 import System.IO.Unsafe (unsafePerformIO)
 import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
+import qualified Migrations as M
 
 
 testDB :: ConnectionString
@@ -24,7 +25,9 @@ withDBConn = runNoLoggingT . (withPostgresqlConn testDB) . runSqlConn
 
 prepareDB :: ReaderT SqlBackend (NoLoggingT IO) ()
 prepareDB = do
-    _ <- runMigration migrateAll
+    runMigration $ do
+        migrateAll
+    
     dropModels
 
 -- NOTE(luis) yeah, we're doing all (model) migrations, running the given spec, and then truncating all tables again
@@ -35,16 +38,17 @@ run :: ReaderT SqlBackend (NoLoggingT IO) () -> IO ()
 run f =  withDBConn $ prepareDB >> f >> dropModels
 
 mkUser :: Text -> Text -> Gender -> UserAccount
-mkUser name email gender = 
+mkUser username email gender = 
     UserAccount
         email
         (unsafePerformIO $ hashPassword "defaultPassword") 
-        name
-        gender 
+        (Username username)
+        (Just gender) 
         (Just zeroTime)
         Nothing
-        (Just zeroTime)
-        (Just zeroTime)
+        (Just Capricorn)
+        zeroTime
+        zeroTime
 
 --mkDream :: Int -> 
 mkDream :: Key UserAccount -> Text -> Text -> [Text] -> UTCTime -> Maybe (Bool, Bool, Bool, Bool, Bool) -> Dream

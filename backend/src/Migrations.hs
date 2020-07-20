@@ -11,6 +11,9 @@ All migrations here should be idempotent: assume they'll be run against an up-to
 - Use `CREATE INDEX [CONCURRENTLY] IF NOT EXISTS` for indices.
 -}
 
+enableCitext :: Sql
+enableCitext = "CREATE EXTENSION IF NOT EXISTS citext"
+
 addTimestampFunctions :: Sql
 addTimestampFunctions = "CREATE OR REPLACE FUNCTION create_timestamps()   \
 \        RETURNS TRIGGER AS $$\
