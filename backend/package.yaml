@@ -42,6 +42,7 @@ dependencies:
 - http-types
 - esqueleto
 - case-insensitive
+- http-api-data
 
 # TODO: look into dotenv (https://github.com/stackbuilders/dotenv-hs) and servant-swagger/servant-auth-swagger
 

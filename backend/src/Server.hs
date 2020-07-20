@@ -6,6 +6,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+-- I'm sorry Hubert
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 
 module Server where
 
@@ -318,8 +321,61 @@ instance ToCapture (Capture "dreamId" Int64) where
 instance ToCapture (Capture "userId" Int64) where
   toCapture _ = DocCapture "userId" "ID of the user to inspect, as returned when creating it."
 
+
+spiel = " (if not provided, won't affect the filtering.)"
+anyFlag = ["true", "false", "null"]
+instance ToParam (QueryParam "lucid" Bool) where
+  toParam _ =
+    DocQueryParam "lucid" anyFlag ("Filter by: is lucid or not " <> spiel) Normal
+
+instance ToParam (QueryParam "nightmare" Bool) where
+  toParam _ =
+    DocQueryParam "nightmare" anyFlag ("Filter by: is nightmare or not" <> spiel) Normal
+
+instance ToParam (QueryParam "recurring" Bool) where
+  toParam _ =
+    DocQueryParam "recurring" anyFlag ("Filter by: is recurring or not" <> spiel) Normal
+
+instance ToParam (QueryParams "emotions" EmotionLabel) where
+  toParam _ =
+    DocQueryParam "emotions" ["joy"] ("Filter by emotions: requires a list, will return dreams that have all the given emotions") List
+
+instance ToParam (QueryParam "location" Text) where
+  toParam _ =
+    DocQueryParam "location" ["Queens"] ("Filter by location" <> spiel) Normal
+
+instance ToParam (QueryParam "keywords" Text) where
+  toParam _ =
+    DocQueryParam "keywords" ["some cats are scary"] ("Filter by keyword, free text search.") Normal
+
+instance ToParam (QueryParam "gender" Gender) where
+  toParam _ =
+    DocQueryParam "gender" ["male", "female", "nonBinary"] ("Filter by dreamer's gender" <> spiel) Normal
+
+instance ToParam (QueryParam "zodiac_sign" ZodiacSign) where
+  toParam _ =
+    DocQueryParam "zodiac_sign" ["capricorn", "sagittarius", "..."] ("Filter by dreamer's zodiac sign" <> spiel) Normal
+
+instance ToParam (QueryParam "before" UTCTime) where
+  toParam _ =
+    DocQueryParam "before" ["2017-02-14T00:00:00Z"] ("Filter by dreamed at date: will returns any dreams before the given\
+    \date, inclusive." <> spiel) Normal
+
+instance ToParam (QueryParam "after" UTCTime) where
+  toParam _ =
+    DocQueryParam "after" ["2017-02-14T00:00:00Z"] ("Filter by dreamed at date: will returns any dreams after the given\
+    \date, inclusive." <> spiel) Normal
+
+instance ToParam (QueryParam "limit" Int64) where
+  toParam _ =
+    DocQueryParam "limit" ["101", "2", "..."] ("Limit the number of results. Defaults to 100 if not provided.") Normal
+
+instance ToParam (QueryParam "last_seen_id" (Key Dream)) where
+  toParam _ =
+    DocQueryParam "last_seen_id" ["42"] ("The id of the last dream seen, for pagination. Omit for the first page.") Normal  
 -- | API types
 -- inspired by: https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
+
 type Protected =
   "api" :> "user" :> Get '[JSON] UserAccount
     :<|> "api" :> "user" :> ReqBody '[JSON] UpdateUserAccount :> Verb 'PUT 204 '[JSON] NoContent
@@ -332,6 +388,19 @@ type Protected =
 type Unprotected =
   "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
     :<|> "api" :> "login" :> ReqBody '[JSON] Login :> PostCreated '[JSON] UserSession
+    :<|> "api" :> "dreams" :> 
+      QueryParam "lucid" Bool :>
+      QueryParam "nightmare" Bool :>
+      QueryParam "recurring" Bool :>
+      QueryParams "emotions" EmotionLabel :>
+      QueryParam "keywords" Text :>
+      QueryParam "location" Text :>
+      QueryParam "gender" Gender :>
+      QueryParam "zodiac_sign" ZodiacSign :>
+      QueryParam "before" UTCTime :>
+      QueryParam "after" UTCTime :>
+      QueryParam "limit" Int64 :>
+      QueryParam "last_seen_id" (Key Dream) :> Get '[JSON] [DreamWithUserInfo]
 
 -- TODO(luis) add a limit/pagination
 type KindaProtected =
@@ -364,7 +433,7 @@ kindaProtected :: AuthResult AuthenticatedUser -> ServerT KindaProtected AppM
 kindaProtected authResult = allUserDreams authResult
 
 unprotected :: CookieSettings -> JWTSettings -> ServerT Unprotected AppM
-unprotected cs jwts = createUser cs jwts :<|> login cs jwts
+unprotected cs jwts = createUser cs jwts :<|> login cs jwts :<|> searchDreams cs jwts
 
 -- Protected handlers
 
@@ -496,6 +565,27 @@ login _ jwts Login {..} = do
       case (checkPassword loginPassword (userAccountPassword user)) of
         PasswordCheckFail -> throwError $ err401 {errBody = "Invalid email or password."}
         PasswordCheckSuccess -> sessionWithUser jwts userId
+
+searchDreams :: CookieSettings -> JWTSettings
+  -> Maybe Bool -- lucid
+  -> Maybe Bool -- nightmare
+  -> Maybe Bool -- recurring
+  -> [EmotionLabel] 
+  -> Maybe Text -- keywords
+  -> Maybe Text -- location
+  -> Maybe Gender
+  -> Maybe ZodiacSign
+  -> Maybe UTCTime
+  -> Maybe UTCTime
+  -> Maybe Int64
+  -> Maybe (Key Dream)
+  -> AppM [DreamWithUserInfo]
+searchDreams _ _ l n r es kws loc g z before after limit lastSeen = do
+  let emotions = if null es then Nothing else Just es
+      filters = DreamFilters l n r emotions kws loc g z before after limit lastSeen
+  dreams <- runDB $ filteredDreams filters Nothing
+  return $ map dreamWithKeys dreams
+
 
 -- Handlers that check their own authentication
 

@@ -16,6 +16,7 @@ import Database.Persist (PersistField(..), PersistValue(..), SqlType(SqlOther))
 import RIO.Text (pack, unpack, length)
 import Data.CaseInsensitive (CI)
 import qualified Data.CaseInsensitive as CI
+import Web.HttpApiData
 
 type Port = Int
 
@@ -88,22 +89,30 @@ instance (FromJSON (CI Text)) where
 -- find them.)
 
 data Gender = Female | Male | NonBinary
-      deriving (Show, Read, Eq, Generic)
+      deriving (Show, Read, Eq, Generic, Bounded, Enum)
 derivePersistField "Gender"
 instance ToJSON Gender
 instance FromJSON Gender
+instance FromHttpApiData Gender where
+  parseUrlPiece = parseBoundedTextData
 
 emotionLabels :: [Text]
 emotionLabels = ["joy", "trust", "anticipation", "surprise", "disgust", "sadness", "fear", "anger", "acceptance", "admiration", "affection", "annoyance", "alienation", "amazement", "anxiety", "apathy", "awe", "betrayal", "bitter", "bold", "boredom", "bravery", "brooding", "calm", "cautious", "cheerful", "comfortable", "confused", "cranky", "crushed", "curious", "denial", "despair", "disappointed", "distress", "drained", "eager", "embarassed", "empty", "energized", "envy", "excited", "foreboding", "fulfilled", "grateful", "guilt", "hatred", "shame", "helpless", "hollow", "hopeful", "humiliated", "hurt", "inspired", "intimidated", "irritated", "jealous", "lazy", "lonely", "longing", "love", "lust", "mellow", "nervous", "numb", "panic", "paranoia", "peaceful", "pity", "powerful", "powerless", "protective", "proud", "reluctance", "remorse", "resentment", "self-conscious", "sensitive", "shock", "sick", "shy", "stressed", "tired", "alert", "vigilant", "weary", "worry"]
 
 newtype EmotionLabel = EmotionLabel Text
-  deriving (Show, Eq, Generic, PersistField, PersistFieldSql)
+  deriving (Show, Eq, Generic, PersistField, PersistFieldSql, IsString)
 instance ToJSON EmotionLabel
 instance FromJSON EmotionLabel where
   parseJSON = withText "EmotionLabel" $ \text ->
     case (mkEmotionLabel text) of
       Just el -> pure el
       Nothing -> fail $ unpack $ text <> " isn't a known emotion."
+
+instance FromHttpApiData EmotionLabel where
+  parseUrlPiece a =
+    case (mkEmotionLabel a) of
+      Nothing -> Left $ a <> " is not an emotion known to our database!" 
+      Just e -> Right $ e
 
 mkEmotionLabel :: Text -> Maybe EmotionLabel
 mkEmotionLabel s = 
@@ -148,7 +157,10 @@ data ZodiacSign =
     | Capricorn
     | Aquarius
     | Pisces
-    deriving (Show, Eq, Generic, Read)
+    deriving (Show, Read, Eq, Generic, Bounded, Enum)
+
 derivePersistField "ZodiacSign"
 instance FromJSON ZodiacSign
 instance ToJSON ZodiacSign
+instance FromHttpApiData ZodiacSign where
+  parseUrlPiece = parseBoundedTextData
