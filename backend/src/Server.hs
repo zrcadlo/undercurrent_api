@@ -376,6 +376,10 @@ instance ToParam (QueryParam "username" Username) where
   toParam _ =
     DocQueryParam "username" ["nena.alpaca"] ("A username. Checks existence. If you provide your own, we'll search private dreams too.") Normal
 
+instance ToParam (QueryFlag "mine") where
+  toParam _ =
+    DocQueryParam "mine" [] ("If specified, will only search the current user's dreams. Because this is a flag, you can call it like this: /api/dreams/mine") Flag
+
 -- | API types
 -- inspired by: https://github.com/haskell-servant/servant-auth/tree/696fab268e21f3d757b231f0987201b539c52621#readme
 
@@ -391,10 +395,10 @@ type Unprotected =
   "api" :> "users" :> ReqBody '[JSON] NewUserAccount :> PostCreated '[JSON] UserSession
     :<|> "api" :> "login" :> ReqBody '[JSON] Login :> PostCreated '[JSON] UserSession
 
-
 type KindaProtected =
   "api" :> "dreams" :> 
     -- user filters
+    QueryFlag "mine" :>
     QueryParam "username" Username :>
     QueryParam "location" Text :>
     QueryParam "gender" Gender :>
@@ -569,6 +573,7 @@ login _ jwts Login {..} = do
 -- Handlers that check their own authentication
 
 searchDreams :: AuthResult AuthenticatedUser
+  -> Bool -- only mine?
   -> Maybe Username
   -> Maybe Text -- location
   -> Maybe Gender
@@ -584,9 +589,15 @@ searchDreams :: AuthResult AuthenticatedUser
   -> Maybe (Key Dream)
   -> AppM [DreamWithUserInfo]
 
+-- if the "mine" flag is specified, search only my dreams. Convenience to not have to provide my own username.
+searchDreams (Authenticated (AuthenticatedUser auId)) True _ t g z l n r es k b a lt ls =
+  let currentUserId = toSqlKey $ userId $ auId
+  in
+    searchDreams' (Just (currentUserId, True)) t g z l n r es k b a lt ls
+
 -- searching a user's dreams: if I provide my own username, search my dreams. If I provide someone else's,
 -- search their _public_ dreams.
-searchDreams (Authenticated (AuthenticatedUser auId)) (Just username) t g z l n r es k b a lt ls = do
+searchDreams (Authenticated (AuthenticatedUser auId)) _ (Just username) t g z l n r es k b a lt ls = do
   requestedUser <- runDB $ getBy $ UniqueUsername username
   let currentUserId = toSqlKey $ userId $ auId
   case requestedUser of
@@ -599,7 +610,7 @@ searchDreams (Authenticated (AuthenticatedUser auId)) (Just username) t g z l n 
 
 -- not authenticated (or failed authentication,) but searching a specific user's dreams:
 -- always search as a non-owner
-searchDreams _ (Just username) t g z l n r es k b a lt ls = do
+searchDreams _ _ (Just username) t g z l n r es k b a lt ls = do
   requestedUser <- runDB $ getBy $ UniqueUsername username
   case requestedUser of
     Nothing -> throwError $ err404 {errBody = "The requested user is not a known dreamer."}
@@ -607,7 +618,7 @@ searchDreams _ (Just username) t g z l n r es k b a lt ls = do
       searchDreams' (Just (requestedUserId, False)) t g z l n r es k b a lt ls
 
 -- not searching by username: we're just searching public dreams for everyone.
-searchDreams _ Nothing t g z l n r es k b a lt ls =
+searchDreams _ _ Nothing t g z l n r es k b a lt ls =
   searchDreams' Nothing t g z l n r es k b a lt ls
 
 searchDreams' :: Maybe (Key UserAccount, Bool)

@@ -4,28 +4,24 @@ For an up-to-date version of this documentation, visit the `/docs` endpoint of t
 
 ## GET /api/dreams
 
+### Authentication
+
+This part of the API is protected by JSON Web Tokens ([JWTs](https://en.wikipedia.org/wiki/JSON_Web_Token))
+
+
+Clients must supply the following data
+A JWT Token signed with this server's key
+
+
 ### GET Parameters:
 
-- lucid
-     - **Values**: *true, false, null*
-     - **Description**: Filter by: is lucid or not  (if not provided, won't affect the filtering.)
+- mine
+     - **Description**: If specified, will only search the current user's dreams. Because this is a flag, you can call it like this: /api/dreams/mine
+     - This parameter is a **flag**. This means no value is expected to be associated to this parameter.
 
-- nightmare
-     - **Values**: *true, false, null*
-     - **Description**: Filter by: is nightmare or not (if not provided, won't affect the filtering.)
-
-- recurring
-     - **Values**: *true, false, null*
-     - **Description**: Filter by: is recurring or not (if not provided, won't affect the filtering.)
-
-- emotions
-     - **Values**: *joy*
-     - **Description**: Filter by emotions: requires a list, will return dreams that have all the given emotions
-     - This parameter is a **list**. All GET parameters with the name emotions[] will forward their values in a list to the handler.
-
-- keywords
-     - **Values**: *some cats are scary*
-     - **Description**: Filter by keyword, free text search.
+- username
+     - **Values**: *nena.alpaca*
+     - **Description**: A username. Checks existence. If you provide your own, we'll search private dreams too.
 
 - location
      - **Values**: *Queens*
@@ -38,6 +34,27 @@ For an up-to-date version of this documentation, visit the `/docs` endpoint of t
 - zodiac_sign
      - **Values**: *capricorn, sagittarius, ...*
      - **Description**: Filter by dreamer's zodiac sign (if not provided, won't affect the filtering.)
+
+- lucid
+     - **Values**: *true, false*
+     - **Description**: Filter by: is lucid or not  (if not provided, won't affect the filtering.)
+
+- nightmare
+     - **Values**: *true, false*
+     - **Description**: Filter by: is nightmare or not (if not provided, won't affect the filtering.)
+
+- recurring
+     - **Values**: *true, false*
+     - **Description**: Filter by: is recurring or not (if not provided, won't affect the filtering.)
+
+- emotions
+     - **Values**: *joy*
+     - **Description**: Filter by emotions: requires a list, will return dreams that have all the given emotions
+     - This parameter is a **list**. All GET parameters with the name emotions[] will forward their values in a list to the handler.
+
+- keywords
+     - **Values**: *some cats are scary*
+     - **Description**: Filter by keyword, free text search.
 
 - before
      - **Values**: *2017-02-14T00:00:00Z*
@@ -180,45 +197,6 @@ A JWT Token signed with this server's key
 
 ```javascript
 
-```
-
-## GET /api/user/dreams
-
-### Authentication
-
-This part of the API is protected by JSON Web Tokens ([JWTs](https://en.wikipedia.org/wiki/JSON_Web_Token))
-
-
-Clients must supply the following data
-A JWT Token signed with this server's key
-
-
-### Response:
-
-- Status code 200
-- Headers: []
-
-- Supported content types are:
-
-    - `application/json;charset=utf-8`
-    - `application/json`
-
-- Example (`application/json;charset=utf-8`, `application/json`):
-
-```javascript
-[]
-```
-
-- A dream with the dream id and dreamer id included (`application/json;charset=utf-8`, `application/json`):
-
-```javascript
-[{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
-```
-
-- A dream with the dream id and dreamer id included, A dream with the dream id and dreamer id included (`application/json;charset=utf-8`):
-
-```javascript
-[{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"},{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
 ```
 
 ## POST /api/user/dreams
@@ -405,49 +383,6 @@ A JWT Token signed with this server's key
 
 ```javascript
 {"token":"some-long-token","user":{"email":"nena@alpaca.com","location":"Tokyo, Japan","username":"nena.alpaca","zodiac_sign":"Scorpio","birthday":null,"gender":"Female"}}
-```
-
-## GET /api/users/:userId/dreams
-
-### Authentication
-
-This part of the API is protected by JSON Web Tokens ([JWTs](https://en.wikipedia.org/wiki/JSON_Web_Token))
-
-
-Clients must supply the following data
-A JWT Token signed with this server's key
-
-
-### Captures:
-
-- *userId*: ID of the user to inspect, as returned when creating it.
-
-### Response:
-
-- Status code 200
-- Headers: []
-
-- Supported content types are:
-
-    - `application/json;charset=utf-8`
-    - `application/json`
-
-- Example (`application/json;charset=utf-8`, `application/json`):
-
-```javascript
-[]
-```
-
-- A dream with the dream id and dreamer id included (`application/json;charset=utf-8`, `application/json`):
-
-```javascript
-[{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
-```
-
-- A dream with the dream id and dreamer id included, A dream with the dream id and dreamer id included (`application/json;charset=utf-8`):
-
-```javascript
-[{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"},{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
 ```
 
 ## GET /docs
