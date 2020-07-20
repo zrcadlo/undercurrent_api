@@ -595,7 +595,7 @@ searchDreams (Authenticated (AuthenticatedUser auId)) True _ t g z l n r es k b 
   in
     searchDreams' (Just (currentUserId, True)) t g z l n r es k b a lt ls
 
-searchDreams _ True _ t g z l n r es k b a lt ls =
+searchDreams _ True _ _ _ _ _ _ _ _ _ _ _ _ _ =
   throwError $ err401 {errBody= "Need to be signed in to search your own dreams!"}
 
 -- searching a user's dreams: if I provide my own username, search my dreams. If I provide someone else's,
