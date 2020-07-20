@@ -141,6 +141,9 @@ instance FromJSON Username where
       Right u -> pure u
       Left e -> fail $ unpack e
 
+instance FromHttpApiData Username where
+  parseUrlPiece = mkUsername
+
 newtype Email = Email (CI Text)
   deriving (Show, Eq, Generic, PersistField, PersistFieldSql, IsString)
 
