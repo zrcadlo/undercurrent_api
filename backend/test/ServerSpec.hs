@@ -10,10 +10,11 @@ import Test.Hspec.Wai
 import Test.Hspec.Wai.JSON
 import Network.Wai (Application)
 import Servant.Auth.Server (makeJWT, JWTSettings, defaultJWTSettings, defaultCookieSettings, generateKey)
-import Server (AuthenticatedUser(..), UserId(..), app)
+import ApiTypes (AuthenticatedUser(..), UserId(..))
+import Server (app)
 import Run (makeDBConnectionPool)
-import Models (runMigrations, Dream(..), UserAccount(..), migrateAll, dropModels)
-import Database.Persist.Postgresql (runMigrationUnsafe, addMigration, insertMany, ConnectionString, runMigration, insert, withPostgresqlConn, runSqlConn)
+import Models (Dream(..), UserAccount(..), migrateAll, dropModels)
+import Database.Persist.Postgresql (insertMany, ConnectionString, runMigration, insert, withPostgresqlConn, runSqlConn)
 import Servant.Server (Context(..))
 import Network.HTTP.Types (methodDelete, methodGet, methodPut, methodPost)
 import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
@@ -24,16 +25,15 @@ import RIO.ByteString.Lazy (toStrict)
 import RIO.Time (fromGregorian, UTCTime(..))
 import Util
 import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
-import qualified Migrations as M
+
 
 testDB :: DatabaseUrl
 testDB = "postgresql://localhost/undercurrent_test?user=luis"
 noOpLog :: LogFunc
 noOpLog = mkLogFunc $ (\_ _ _ _ -> pure ())
---testKey :: JWK
-testKey = unsafePerformIO $ generateKey
+
 jwtCfg :: JWTSettings
-jwtCfg =  defaultJWTSettings testKey
+jwtCfg =  defaultJWTSettings $ unsafePerformIO $ generateKey
 
 
 testApp ::  IO Application
@@ -97,17 +97,17 @@ setupData = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
                 zeroTime
                 zeroTime
 
-    nenaDreams <- insertMany $ 
+    _ <- insertMany $ 
         [(Dream nena "Nena's dream" "Nena dreams" False False True False False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
         ,(Dream nena "Nena's secret dream" "Nena dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
         ]
 
-    charlieDreams <- insertMany $
+    _ <- insertMany $
         [(Dream charlie "Charlies's dream" "Charlie dreams" False False True False False (JSONB [EmotionLabel "joy", EmotionLabel "surprise"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
         ,(Dream charlie "Charlie's secret dream" "Charlie dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
         ]
 
-    pacoDreams <- insertMany $
+    _ <- insertMany $
         [(Dream paco "Paco's secret dream" "Paco dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)]
 
     return ()
