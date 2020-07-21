@@ -420,6 +420,14 @@ spec =
                     `shouldRespondWith` [json|[]|] {matchStatus = 200 } 
 
         describe "GET /api/dreams" $ do
+            context "all recent dreams" $ do
+                it "finds the most recent dreams" $ do
+                    let recentDreams = [json|[
+                        {"nightmare":false,"lucid":false,"dreamer_location":"Tokyo, Japan","private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"},{"nightmare":true,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}                        
+                    ]|]
+                    get "/api/dreams?limit=2"
+                        `shouldRespondWith` recentDreams {matchStatus = 200}
+
             context "with user filters" $ do
                 it "finds public dreams that match the user filters" $ do
                     let pacoDreams = [json|[
@@ -483,6 +491,31 @@ spec =
                     -- we should see two of Charlie's dreams.
                     get "/api/dreams?before=2020-07-07T00:00:00Z&limit=1&last_seen_id=6"
                         `shouldRespondWith` nextDreams {matchStatus=200}
+
+            context "with bad filters" $ do
+                it "gets a bad request error" $ do
+                    get "/api/dreams?before=yesterday"
+                        `shouldRespondWith` "Error parsing query parameter before failed: Failed reading: date must be of form [+,-]YYYY-MM-DD" {matchStatus = 400}
+
+                    -- an unrecognized parameter will simply be ignored
+                    get "/api/dreams?zodiacSign=libra&limit=1"
+                        `shouldRespondWith` 200
+                    
+                    get "/api/dreams?zodiac_sign=liberace"
+                        `shouldRespondWith` "Error parsing query parameter zodiac_sign failed: could not parse: `liberace'" {matchStatus = 400}
+
+                    get "/api/dreams?gender=bender"
+                        `shouldRespondWith` "Error parsing query parameter gender failed: could not parse: `bender'" {matchStatus = 400}
+
+                    get "/api/dreams?username=notexist"
+                        `shouldRespondWith` 404
+
+                    get "/api/dreams?lucid=nope"
+                        `shouldRespondWith` "Error parsing query parameter lucid failed: could not parse: `nope'" {matchStatus = 400}
+
+                    get "/api/dreams?emotions=joy&emotions=joy2"
+                        `shouldRespondWith` "Error parsing query parameter(s) emotions failed: joy2 is not an emotion known to our database!" {matchStatus = 400}
+                    
         where
             makeToken :: AuthenticatedUser -> ByteString
             makeToken u = toStrict $ fromRight "bad-token" $ unsafePerformIO $ (makeJWT u jwtCfg Nothing)
