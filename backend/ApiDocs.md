@@ -16,12 +16,12 @@ A JWT Token signed with this server's key
 ### GET Parameters:
 
 - mine
-     - **Description**: If specified, will only search the current user's dreams. Because this is a flag, you can call it like this: /api/dreams/mine
+     - **Description**: If specified, will only search the current user's dreams. Because this is a flag, you can call it like this: /api/dreams?mine
      - This parameter is a **flag**. This means no value is expected to be associated to this parameter.
 
 - username
      - **Values**: *nena.alpaca*
-     - **Description**: A username. Checks existence. If you provide your own, we'll search private dreams too.
+     - **Description**: A username. Checks existence. If you provide your own, we'll search private dreams too. If none is provide, search all public dreams.
 
 - location
      - **Values**: *Queens*
@@ -49,20 +49,20 @@ A JWT Token signed with this server's key
 
 - emotions
      - **Values**: *joy*
-     - **Description**: Filter by emotions: requires a list, will return dreams that have all the given emotions
+     - **Description**: Filter by emotions: requires a list, will return dreams that have all the given emotions (if not provided, won't affect the filtering.)
      - This parameter is a **list**. All GET parameters with the name emotions[] will forward their values in a list to the handler.
 
 - keywords
      - **Values**: *some cats are scary*
-     - **Description**: Filter by keyword, free text search.
+     - **Description**: Filter by keyword, free text search. (if not provided, won't affect the filtering.)
 
 - before
      - **Values**: *2017-02-14T00:00:00Z*
-     - **Description**: Filter by dreamed at date: will returns any dreams before the givendate, inclusive. (if not provided, won't affect the filtering.)
+     - **Description**: Filter by dreamed at date: will returns any dreams before the given date, inclusive. (if not provided, won't affect the filtering.)
 
 - after
      - **Values**: *2017-02-14T00:00:00Z*
-     - **Description**: Filter by dreamed at date: will returns any dreams after the givendate, inclusive. (if not provided, won't affect the filtering.)
+     - **Description**: Filter by dreamed at date: will returns any dreams after the given date, inclusive. (if not provided, won't affect the filtering.)
 
 - limit
      - **Values**: *101, 2, ...*
@@ -92,13 +92,13 @@ A JWT Token signed with this server's key
 - A dream with the dream id and dreamer id included (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-[{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
+[{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
 ```
 
 - A dream with the dream id and dreamer id included, A dream with the dream id and dreamer id included (`application/json;charset=utf-8`):
 
 ```javascript
-[{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"},{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
+[{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"},{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
 ```
 
 ## POST /api/login
@@ -236,7 +236,7 @@ A JWT Token signed with this server's key
 - A dream with the dream id and dreamer id included (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dreamer_id":42,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}
+{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}
 ```
 
 ## DELETE /api/user/dreams/:dreamId

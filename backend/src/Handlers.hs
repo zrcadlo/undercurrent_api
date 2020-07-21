@@ -295,7 +295,6 @@ dreamWithKeys (Entity dreamId Dream {..}, Entity _ UserAccount {..}) =
       dkRecurring = dreamIsRecurring,
       dkPrivate = dreamIsPrivate,
       dkStarred = dreamIsStarred,
-      dkDreamerId = dreamUserId,
       dkDreamId = dreamId,
       dkDreamerUsername = userAccountUsername,
       dkDreamerLocation = userAccountLocation,

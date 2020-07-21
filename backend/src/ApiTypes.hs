@@ -226,7 +226,6 @@ data DreamWithUserInfo = DreamWithUserInfo
     dkRecurring :: Bool,
     dkPrivate :: Bool,
     dkStarred :: Bool,
-    dkDreamerId :: Key UserAccount,
     dkDreamId :: Key Dream,
     dkDreamerUsername :: Username,
     dkDreamerLocation :: Maybe Text,
@@ -256,7 +255,6 @@ instance ToSample DreamWithUserInfo where
           True
           False
           True
-          (toSqlKey 42)
           (toSqlKey 42)
           "alpaca.cool69420"
           (Just "Queens")
