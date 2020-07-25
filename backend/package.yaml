@@ -36,6 +36,8 @@ dependencies:
 - persistent
 - persistent-template
 - persistent-postgresql
+- postgresql-simple
+- postgresql-simple-migration
 - monad-logger
 - password
 - password-instances

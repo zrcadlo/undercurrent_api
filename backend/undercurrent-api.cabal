@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e6776e849c321f424883265a316b7c074284764cf20c25303d1e7c16e47f880e
+-- hash: 41eafc7457e274426fc395db66c7caf76382bc8b4a2a3dccb915c7b7ed9a5a71
 
 name:           undercurrent-api
 version:        0.1.0.0
@@ -55,6 +55,8 @@ library
     , persistent
     , persistent-postgresql
     , persistent-template
+    , postgresql-simple
+    , postgresql-simple-migration
     , rio >=0.1.12.0
     , servant
     , servant-auth
@@ -89,6 +91,8 @@ executable undercurrent-api-exe
     , persistent
     , persistent-postgresql
     , persistent-template
+    , postgresql-simple
+    , postgresql-simple-migration
     , rio >=0.1.12.0
     , servant
     , servant-auth
@@ -130,6 +134,8 @@ test-suite undercurrent-api-test
     , persistent
     , persistent-postgresql
     , persistent-template
+    , postgresql-simple
+    , postgresql-simple-migration
     , rio >=0.1.12.0
     , servant
     , servant-auth
