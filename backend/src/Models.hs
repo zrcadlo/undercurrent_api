@@ -19,12 +19,12 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import           RIO.Time                       ( UTCTime )
-import           Database.Persist.Postgresql    (addMigration,  Key
+import           Database.Persist.Postgresql    (Key
                                                 , Entity(..)
                                                 , SqlPersistT
                                                 , rawExecute
                                                 , runSqlPool
-                                                , runMigration
+                                                
                                                 , SqlBackend
                                                 )
 import           Data.Password                  ( PasswordHash(..) )
@@ -39,7 +39,6 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as E
 import           Database.Esqueleto.PostgreSQL.JSON
                                                 ( JSONB )
 import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
-import qualified Migrations as M
 import Util (zeroTime)
 
 
@@ -89,19 +88,6 @@ instance ToJSON UserAccount where
         , "zodiac_sign" .= userAccountZodiacSign
         -- TODO(luis) maybe surface created_at?
         ]
-
--- all migrations added with `addMigration` should be idempotent, if not, mark them as unsafe
--- by flipping the first parameter to `False`.
--- See:
--- https://github.com/yesodweb/persistent/issues/919#issuecomment-504693703
--- https://hackage.haskell.org/package/persistent-2.10.0/docs/Database-Persist-Sql.html#g:1
-runMigrations :: ReaderT SqlBackend IO ()
-runMigrations = runMigration $ do
-    addMigration True M.enableCitext 
-    migrateAll
-    addMigration True M.addTimestampFunctions
-    addMigration True M.addUserTriggers
-    addMigration True M.addDreamTriggers
 
 runDB
     :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)

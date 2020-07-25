@@ -8,8 +8,7 @@ import           Run
 import           System.Envy                    ( decodeWithDefaults )
 import Options.Applicative.Simple
 import qualified Paths_undercurrent_api
-import Models (runMigrations)
-import Database.Persist.Postgresql (runSqlPool)
+import Migrations (runMigrations)
 import Servant.Server (Context(..))
 import Servant.Auth.Server (readKey, defaultCookieSettings, defaultJWTSettings)
 
@@ -31,10 +30,7 @@ main = do
                  )
     )
     empty
-  -- TODO: read key from a file/cfg:
-  -- http://hackage.haskell.org/package/servant-auth-server-0.4.5.1/docs/Servant-Auth-Server.html#v:readKey
-  -- or a secret from env:
-  -- http://hackage.haskell.org/package/servant-auth-server-0.4.5.1/docs/Servant-Auth-Server.html#v:fromSecret
+
   lo <- logOptionsHandle stderr False
   -- default to local db, port 3000 (see Types.hs)
   env <- decodeWithDefaults defaultConfig
@@ -50,7 +46,11 @@ main = do
         jwtCfg = defaultJWTSettings jwtKey
         cookieCfg = defaultCookieSettings
         cfg = cookieCfg :. jwtCfg :. EmptyContext
-     in if (optionsMigrate options) then 
-        runSqlPool runMigrations pool
+     in if (optionsMigrate options) then
+       runRIO app $ do
+          didMigrate <- liftIO $ runMigrations "migrations" (databaseUrl env)
+          case didMigrate of
+            Left _ -> logInfo "Error migrating!"
+            Right _ -> logInfo "All migrations ran!"
        else
         startApp cfg cookieCfg jwtCfg app

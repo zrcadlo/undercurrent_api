@@ -2,46 +2,22 @@
 
 module Migrations where
 
-import Database.Persist.Sql (Sql)
+import Import
+import Database.PostgreSQL.Simple (connectPostgreSQL, withTransaction)
+import Database.PostgreSQL.Simple.Migration (MigrationResult(..), MigrationCommand(..), MigrationContext(..), runMigration)
 
-{- NOTE(luis)
-All migrations here should be idempotent: assume they'll be run against an up-to-date schema at some point:
-- Use `CREATE OR REPLACE` for stored procedures.
-- Use `Drop trigger if exists ... create trigger` for triggers.
-- Use `CREATE INDEX [CONCURRENTLY] IF NOT EXISTS` for indices.
--}
+-- TODO(luis) we may want to take a Bool parameter to send
+-- in `MigrationContext`: right now it defaults to verbose.
+runMigrations :: FilePath -> DatabaseUrl -> IO (Either String String)
+runMigrations migrationsDir conStr = do
+  con <- connectPostgreSQL $ encodeUtf8 conStr
+  -- initialize the `schema_migrations` table
+  void $ withTransaction con $ runMigration $
+    MigrationContext MigrationInitialization True con
+  -- run the actual migrations
+  result <- withTransaction con $ runMigration $ MigrationContext
+              (MigrationDirectory migrationsDir) True con
 
-enableCitext :: Sql
-enableCitext = "CREATE EXTENSION IF NOT EXISTS citext"
-
-addTimestampFunctions :: Sql
-addTimestampFunctions = "CREATE OR REPLACE FUNCTION create_timestamps()   \
-\        RETURNS TRIGGER AS $$\
-\        BEGIN\
-\            NEW.created_at = now();\
-\            NEW.updated_at = now();\
-\            RETURN NEW;   \
-\        END;\
-\        $$ language 'plpgsql';\
-\ \
-\CREATE OR REPLACE FUNCTION update_timestamps()   \
-\        RETURNS TRIGGER AS $$\
-\        BEGIN\
-\            NEW.updated_at = now();\
-\            RETURN NEW;   \
-\        END;\
-\        $$ language 'plpgsql';"
-
-addUserTriggers :: Sql
-addUserTriggers = 
-    "DROP TRIGGER IF EXISTS user_account_insert ON user_account;\
-      \CREATE TRIGGER user_account_insert BEFORE INSERT ON user_account FOR EACH ROW EXECUTE PROCEDURE create_timestamps();\
-    \DROP TRIGGER IF EXISTS user_account_update ON user_account;\
-      \CREATE TRIGGER user_account_update BEFORE UPDATE ON user_account FOR EACH ROW EXECUTE PROCEDURE update_timestamps();"
-
-addDreamTriggers :: Sql
-addDreamTriggers =
-    "DROP TRIGGER IF EXISTS dream_insert ON dream;\
-      \CREATE TRIGGER dream_insert BEFORE INSERT ON dream FOR EACH ROW EXECUTE PROCEDURE create_timestamps();\
-    \DROP TRIGGER IF EXISTS dream_update ON dream;\
-      \CREATE TRIGGER dream_update BEFORE UPDATE ON dream FOR EACH ROW EXECUTE PROCEDURE update_timestamps();"
+  case result of
+    MigrationSuccess -> pure $ Right "All migrations ran."
+    MigrationError e -> pure $ Left e
