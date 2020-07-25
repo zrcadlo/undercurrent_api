@@ -30,10 +30,7 @@ main = do
                  )
     )
     empty
-  -- TODO: read key from a file/cfg:
-  -- http://hackage.haskell.org/package/servant-auth-server-0.4.5.1/docs/Servant-Auth-Server.html#v:readKey
-  -- or a secret from env:
-  -- http://hackage.haskell.org/package/servant-auth-server-0.4.5.1/docs/Servant-Auth-Server.html#v:fromSecret
+
   lo <- logOptionsHandle stderr False
   -- default to local db, port 3000 (see Types.hs)
   env <- decodeWithDefaults defaultConfig
