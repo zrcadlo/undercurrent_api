@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 41eafc7457e274426fc395db66c7caf76382bc8b4a2a3dccb915c7b7ed9a5a71
+-- hash: 76d8cce94dd3871f97cc58ddcdeeeda225766ddf84202d003b756a55d8fb4697
 
 name:           undercurrent-api
 version:        0.1.0.0
@@ -110,6 +110,7 @@ test-suite undercurrent-api-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Helpers
       ModelSpec
       ServerSpec
       UtilSpec

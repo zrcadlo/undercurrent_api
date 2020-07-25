@@ -7,35 +7,25 @@ module ModelSpec (spec) where
 import Import
 import Test.Hspec
 import Models
-import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
-import Database.Persist.Postgresql (insert_, toSqlKey, Entity(..), insert, SqlBackend, runSqlConn, withPostgresqlConn, ConnectionString)
+import Control.Monad.Logger (NoLoggingT(..))
+import Database.Persist.Postgresql (insert_, toSqlKey, Entity(..), insert, SqlBackend)
 import Data.Password.Argon2 (hashPassword)
 import RIO.Time (fromGregorian, UTCTime(..))
 import Util (zeroTime)
 import System.IO.Unsafe (unsafePerformIO)
 import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
-import qualified Migrations as M
-
-
-testDB :: ConnectionString
-testDB = "postgresql://localhost/undercurrent_test?user=luis"
-
-withDBConn :: (MonadIO m, MonadUnliftIO m) => ReaderT SqlBackend (NoLoggingT m) a -> m a
-withDBConn = runNoLoggingT . (withPostgresqlConn testDB) . runSqlConn
-
-migrate :: IO ()
-migrate = M.runMigrations "migrations" $ decodeUtf8Lenient testDB
+import Helpers
 
 prepareDB :: ReaderT SqlBackend (NoLoggingT IO) ()
 prepareDB = do
-    pure migrate >> dropModels
+    dropModels
 
 -- NOTE(luis) yeah, we're doing all (model) migrations, running the given spec, and then truncating all tables again
 -- it's both clean and horrible at the same time.
 -- Inspired by these psychos:
 -- https://github.com/bitemyapp/esqueleto/blob/4dbd5339adf99e1f045c0a02211a03c79032f9cf/test/MySQL/Test.hs
 run :: ReaderT SqlBackend (NoLoggingT IO) () -> IO ()
-run f =  withDBConn $ prepareDB >> f >> dropModels
+run f =  migrate >> (withDBConn $ prepareDB >> f >> dropModels)
 
 mkUser :: Username -> Email -> Gender -> UserAccount
 mkUser username email gender = 

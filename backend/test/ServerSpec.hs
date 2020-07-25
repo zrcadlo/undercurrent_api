@@ -14,7 +14,7 @@ import ApiTypes (AuthenticatedUser(..), UserId(..))
 import Server (app)
 import Run (makeDBConnectionPool)
 import Models (Dream(..), UserAccount(..), dropModels)
-import Database.Persist.Postgresql (insertMany, ConnectionString, insert, withPostgresqlConn, runSqlConn)
+import Database.Persist.Postgresql (insertMany, insert, withPostgresqlConn, runSqlConn)
 import Servant.Server (Context(..))
 import Network.HTTP.Types (methodDelete, methodGet, methodPut, methodPost)
 import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
@@ -25,42 +25,35 @@ import RIO.ByteString.Lazy (toStrict)
 import RIO.Time (fromGregorian, UTCTime(..))
 import Util
 import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
-import qualified Migrations as M
+import Helpers
 
-
-testDB :: DatabaseUrl
-testDB = "postgresql://localhost/undercurrent_test?user=luis"
 noOpLog :: LogFunc
 noOpLog = mkLogFunc $ (\_ _ _ _ -> pure ())
 
 jwtCfg :: JWTSettings
 jwtCfg =  defaultJWTSettings $ unsafePerformIO $ generateKey
+{-# NOINLINE jwtCfg #-}
 
 
 testApp ::  IO Application
 testApp = do
-    pool <- makeDBConnectionPool testDB
+    let dbUrl = "postgresql://localhost/undercurrent_test?user=luis"
+    pool <- makeDBConnectionPool dbUrl
     let 
         cookieCfg = defaultCookieSettings 
         cfg = cookieCfg :. jwtCfg :. EmptyContext
         ctx = App
             { appLogFunc = noOpLog
             , appPort = 3033
-            , appDatabaseUrl = testDB
+            , appDatabaseUrl = dbUrl
             , appDBPool = pool
             }
         in 
             return $ app cfg cookieCfg jwtCfg ctx
 
-testDBBS :: ConnectionString
-testDBBS = "postgresql://localhost/undercurrent_test?user=luis"
-
-migrate :: IO ()
-migrate = M.runMigrations "migrations" testDB
-
 setupData :: IO ()
-setupData = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
-    pure migrate >> dropModels
+setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
+    dropModels
     
     -- insert some "givens"
     hashedPw <- hashPassword "secureAlpacaPassword"
@@ -120,7 +113,7 @@ testUserId = 1
 spec :: Spec
 spec = 
     -- before the entire test suite, migrate the schema, drop any existing data, and populate with "seed" data
-    beforeAll_ setupData $ with testApp $ do
+    beforeAll_ (migrate >> setupData) $ with testApp $ do
         describe "GET /docs" $ do
             it "returns a plain text file with docs" $ do
                 get "/docs" `shouldRespondWith` 200
