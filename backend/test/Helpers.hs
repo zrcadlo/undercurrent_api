@@ -19,5 +19,5 @@ migrate :: IO ()
 migrate = do
     didMigrate <- runMigrations "migrations" $ decodeUtf8Lenient testDB
     case didMigrate of
-        Right s -> putStrLn $ "Migrated!" <> s
+        Right s -> putStrLn $ "Migrated: " <> s
         Left e -> putStrLn $ "Error migrating: " <> e
