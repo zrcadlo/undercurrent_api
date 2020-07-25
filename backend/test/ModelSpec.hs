@@ -7,8 +7,8 @@ module ModelSpec (spec) where
 import Import
 import Test.Hspec
 import Models
-import Control.Monad.Logger (MonadLogger, NoLoggingT(runNoLoggingT))
-import Database.Persist.Postgresql (runMigrationUnsafe, addMigration, insert_, toSqlKey, getBy, Entity(..), insert, transactionUndo, runMigration, SqlBackend, runSqlConn, withPostgresqlConn, ConnectionString)
+import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
+import Database.Persist.Postgresql (insert_, toSqlKey, Entity(..), insert, SqlBackend, runSqlConn, withPostgresqlConn, ConnectionString)
 import Data.Password.Argon2 (hashPassword)
 import RIO.Time (fromGregorian, UTCTime(..))
 import Util (zeroTime)
@@ -23,12 +23,12 @@ testDB = "postgresql://localhost/undercurrent_test?user=luis"
 withDBConn :: (MonadIO m, MonadUnliftIO m) => ReaderT SqlBackend (NoLoggingT m) a -> m a
 withDBConn = runNoLoggingT . (withPostgresqlConn testDB) . runSqlConn
 
+migrate :: IO ()
+migrate = M.runMigrations "migrations" $ decodeUtf8Lenient testDB
+
 prepareDB :: ReaderT SqlBackend (NoLoggingT IO) ()
 prepareDB = do
-    runMigration $ do
-        migrateAll
-    
-    dropModels
+    pure migrate >> dropModels
 
 -- NOTE(luis) yeah, we're doing all (model) migrations, running the given spec, and then truncating all tables again
 -- it's both clean and horrible at the same time.
@@ -164,7 +164,7 @@ limitTo :: Int64 -> DreamFilters
 limitTo l = noDreamFilters{filterLimit = Just l}
 
 filterDate :: Maybe UTCTime -> Maybe UTCTime -> DreamFilters
-filterDate before Nothing = noDreamFilters {filterBefore = before}
-filterDate Nothing after = noDreamFilters {filterAfter = after}
-filterDate before after = noDreamFilters {filterBefore=before, filterAfter=after}
 filterDate Nothing Nothing = noDreamFilters
+filterDate b Nothing = noDreamFilters {filterBefore = b}
+filterDate Nothing a = noDreamFilters {filterAfter = a}
+filterDate b a = noDreamFilters {filterBefore=b, filterAfter=a}

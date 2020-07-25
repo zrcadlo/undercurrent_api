@@ -8,8 +8,7 @@ import           Run
 import           System.Envy                    ( decodeWithDefaults )
 import Options.Applicative.Simple
 import qualified Paths_undercurrent_api
-import Models (runMigrations)
-import Database.Persist.Postgresql (runSqlPool)
+import Migrations (runMigrations)
 import Servant.Server (Context(..))
 import Servant.Auth.Server (readKey, defaultCookieSettings, defaultJWTSettings)
 
@@ -50,7 +49,7 @@ main = do
         jwtCfg = defaultJWTSettings jwtKey
         cookieCfg = defaultCookieSettings
         cfg = cookieCfg :. jwtCfg :. EmptyContext
-     in if (optionsMigrate options) then 
-        runSqlPool runMigrations pool
+     in if (optionsMigrate options) then
+        runMigrations "migrations" (databaseUrl env)
        else
         startApp cfg cookieCfg jwtCfg app

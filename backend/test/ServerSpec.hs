@@ -13,8 +13,8 @@ import Servant.Auth.Server (makeJWT, JWTSettings, defaultJWTSettings, defaultCoo
 import ApiTypes (AuthenticatedUser(..), UserId(..))
 import Server (app)
 import Run (makeDBConnectionPool)
-import Models (Dream(..), UserAccount(..), migrateAll, dropModels)
-import Database.Persist.Postgresql (insertMany, ConnectionString, runMigration, insert, withPostgresqlConn, runSqlConn)
+import Models (Dream(..), UserAccount(..), dropModels)
+import Database.Persist.Postgresql (insertMany, ConnectionString, insert, withPostgresqlConn, runSqlConn)
 import Servant.Server (Context(..))
 import Network.HTTP.Types (methodDelete, methodGet, methodPut, methodPost)
 import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
@@ -25,6 +25,7 @@ import RIO.ByteString.Lazy (toStrict)
 import RIO.Time (fromGregorian, UTCTime(..))
 import Util
 import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
+import qualified Migrations as M
 
 
 testDB :: DatabaseUrl
@@ -54,13 +55,12 @@ testApp = do
 testDBBS :: ConnectionString
 testDBBS = "postgresql://localhost/undercurrent_test?user=luis"
 
+migrate :: IO ()
+migrate = M.runMigrations "migrations" testDB
+
 setupData :: IO ()
 setupData = runNoLoggingT $ withPostgresqlConn testDBBS . runSqlConn $ do
-    -- run any missing schema migrations
-    runMigration $ do
-        migrateAll
-
-    dropModels
+    pure migrate >> dropModels
     
     -- insert some "givens"
     hashedPw <- hashPassword "secureAlpacaPassword"
