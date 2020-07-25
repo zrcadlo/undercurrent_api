@@ -50,6 +50,10 @@ main = do
         cookieCfg = defaultCookieSettings
         cfg = cookieCfg :. jwtCfg :. EmptyContext
      in if (optionsMigrate options) then
-        runMigrations "migrations" (databaseUrl env)
+       runRIO app $ do
+          didMigrate <- liftIO $ runMigrations "migrations" (databaseUrl env)
+          case didMigrate of
+            Left _ -> logInfo "Error migrating!"
+            Right _ -> logInfo "All migrations ran!"
        else
         startApp cfg cookieCfg jwtCfg app
