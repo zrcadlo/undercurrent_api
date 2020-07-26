@@ -20,7 +20,7 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import           RIO.Time                       ( UTCTime )
-import           Database.Persist.Postgresql    (Key
+import           Database.Persist.Postgresql    (withPostgresqlConn, ConnectionString, Key
                                                 , Entity(..)
                                                 , SqlPersistT
                                                 , rawExecute
@@ -42,8 +42,11 @@ import           Database.Esqueleto.PostgreSQL.JSON
 import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
 import Util (zeroTime)
 import Database.Persist.Sql.Raw.QQ (sqlQQ)
-import Database.Persist.Sql (PersistValue)
-import Database.Persist.Sql (Single)
+import Database.Persist.Sql (PersistValue, PersistField(..))
+import Database.Persist.Sql (Single(..))
+import RIO.Lens (each)
+import Database.Persist.Postgresql (runSqlConn)
+import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
 
 type DBM m a = (MonadIO m) => ReaderT SqlBackend m a
 type QueryM a = forall m. DBM m a
@@ -102,6 +105,15 @@ runDB
 runDB query = do
     pool <- view dbConnectionPoolL
     liftIO $ runSqlPool query pool
+
+runDBSimple
+    :: (MonadIO m, MonadUnliftIO m)
+    => ConnectionString
+    -> ReaderT SqlBackend (NoLoggingT m) b
+    -> m b
+runDBSimple conStr query = 
+    runNoLoggingT $ withPostgresqlConn conStr $ runSqlConn query
+
 
 
 -- | Custom operators and functions
@@ -275,29 +287,57 @@ sampleUser = UserAccount "nena@alpaca.com"
 instance ToSample UserAccount where
     toSamples _ = singleSample sampleUser
 
--- | Concessions to testing
+{-
+SCARY RAW SQL ZONE
 
+TYPE SAFETY IS FRAGILE HERE
+
+TREAD LIGHTLY!
+-}
+
+-- | Ugly nuclear DB function only good for testing! 
 dropModels :: (MonadIO m) => SqlPersistT m ()
 dropModels = rawExecute
     "TRUNCATE TABLE user_account, dream RESTART IDENTITY"
     []
 
--- | Raw SQL queries, for analytics
+-- | Get tuples of word => occurences, up to N most common words
 -- see notes and test scripts in https://gist.github.com/lfborjas/2fd2d237d5600b392231ae2c472017bb
-mostCommonWords :: Int -> QueryM [(Single PersistValue, Single PersistValue)]
+-- for easy REPL testing, with `stack ghci`, e.g.
+-- *> w <- runDBSimple "postgresql://localhost/undercurrent_dev?user=luis" $ mostCommonWords 3
+-- yields
+-- [("recurring",1728),("prophecy",1728),("smol",1728)]
+mostCommonWords :: Int -> QueryM [(Text, Int)]
 mostCommonWords n = [sqlQQ|
     select word, ndoc as occurences from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream$$)
     order by ndoc desc limit #{n};
-|]
+|] & (fmap . map) (\(a,b)-> (unSingle a :: Text, unSingle b :: Int)) 
 
-dreamCounts :: Text -> QueryM [(Single PersistValue, Single PersistValue, Single PersistValue)]
-dreamCounts w = [sqlQQ| select count (dream.id) filter (where is_lucid = true) as are_lucid,
-                      count (dream.id) filter (where is_lucid = false) as arent_lucid,
-                      count (dream.id) filter (where is_nightmare = true) as are_nightmare
-                      from dream where to_tsvector (title || ' ' || description) @@ to_tsquery ('#{w}')|]
+dreamCounts :: Text -> QueryM [(Int, Int, Int, Int)]
+dreamCounts w = [sqlQQ| 
+    select 
+        count (dream.id) filter (where is_lucid = true) as are_lucid,
+        count (dream.id) filter (where is_nightmare = true) as are_nightmare,
+        count (dream.id) filter (where is_recurring = true) as are_recurring,
+        count (*) as total_dreams
+    from dream where to_tsvector (title || ' ' || description) @@ to_tsquery (#{w})
+|] & (fmap . map) mkPercentages
+    where
+        mkPercentages ((Single lucid), (Single nightmare), (Single recurring), (Single total)) =
+            let t = total::Int
+                l = (lucid::Int) * 100 `div` t 
+                n = (nightmare::Int) * 100 `div` t
+                r = (recurring::Int) * 100 `div` t 
+                
+            in
+            (l,n,r,t)
 
-mostCommonEmotions :: Int -> QueryM [(Single PersistValue, Single PersistValue)]
+
+-- `emotion` is returned as a json value, and as such, it's quoted in the DB.
+-- the `#>>` operator will extract it as actual text:
+-- https://www.postgresql.org/docs/current/functions-json.html#FUNCTIONS-JSON-OP-TABLE
+mostCommonEmotions :: Int -> QueryM [(Text, Int)]
 mostCommonEmotions n = [sqlQQ|
-    select emotion, count (*) as c from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
+    select emotion #>> '{}', count (*) as c from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
     group by emotion order by c desc limit #{n}
-|]
+|] & (fmap . map) (\(a,b) -> (unSingle a :: Text, unSingle b :: Int))
