@@ -309,7 +309,8 @@ dropModels = rawExecute
 -- [("recurring",1728),("prophecy",1728),("smol",1728)]
 mostCommonWords :: Int -> QueryM [(Text, Int)]
 mostCommonWords n = [sqlQQ|
-    select word, ndoc as occurences from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream$$)
+    select word, ndoc as occurences 
+    from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream$$)
     order by ndoc desc limit #{n};
 |] & (fmap . map) (\(a,b)-> (unSingle a :: Text, unSingle b :: Int)) 
 
@@ -320,18 +321,18 @@ dreamCounts w = [sqlQQ|
         count (dream.id) filter (where is_nightmare = true) as are_nightmare,
         count (dream.id) filter (where is_recurring = true) as are_recurring,
         count (*) as total_dreams
-    from dream where to_tsvector (title || ' ' || description) @@ to_tsquery (#{w})
-|] & (fmap . map) mkPercentages
+    from dream 
+    where to_tsvector (title || ' ' || description) @@ to_tsquery (#{w})
+|] & (fmap . map) asCounts
     where
-        mkPercentages ((Single lucid), (Single nightmare), (Single recurring), (Single total)) =
+        asCounts ((Single lucid), (Single nightmare), (Single recurring), (Single total)) =
             let t = total::Int
-                l = (lucid::Int) * 100 `div` t 
-                n = (nightmare::Int) * 100 `div` t
-                r = (recurring::Int) * 100 `div` t 
+                l = (lucid::Int) 
+                n = (nightmare::Int)
+                r = (recurring::Int) 
                 
             in
             (l,n,r,t)
-
 
 -- `emotion` is returned as a json value, and as such, it's quoted in the DB.
 -- the `#>>` operator will extract it as actual text:
@@ -341,3 +342,9 @@ mostCommonEmotions n = [sqlQQ|
     select emotion #>> '{}', count (*) as c from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
     group by emotion order by c desc limit #{n}
 |] & (fmap . map) (\(a,b) -> (unSingle a :: Text, unSingle b :: Int))
+
+topEmotionForKeyword :: Text -> QueryM [(Text, Int)]
+topEmotionForKeyword w = [sqlQQ|
+    select emotion #>> '{}', count (*) as c from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
+    where to_tsvector (title || ' ' || description) @@ to_tsquery (#{w}) group by emotion order by c desc limit 1
+|] & (fmap . map) (\(word, count) -> (unSingle word :: Text, unSingle count :: Int))
