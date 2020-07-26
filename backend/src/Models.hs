@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -40,7 +41,12 @@ import           Database.Esqueleto.PostgreSQL.JSON
                                                 ( JSONB )
 import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
 import Util (zeroTime)
+import Database.Persist.Sql.Raw.QQ (sqlQQ)
+import Database.Persist.Sql (PersistValue)
+import Database.Persist.Sql (Single)
 
+type DBM m a = (MonadIO m) => ReaderT SqlBackend m a
+type QueryM a = forall m. DBM m a
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
     UserAccount
@@ -183,10 +189,9 @@ noDreamFilters = DreamFilters
     Nothing
 
 filteredDreams
-    :: (MonadIO m)
-    => DreamFilters
+    :: DreamFilters
     -> (Maybe (Key UserAccount, Bool))
-    -> ReaderT SqlBackend m [(Entity Dream, Entity UserAccount)]
+    -> QueryM [(Entity Dream, Entity UserAccount)]
 filteredDreams DreamFilters{..} userConditions = do
     let maybeNoConditions = maybe (return ())
     E.select . E.from $ \(dream `E.InnerJoin` userAccount) -> do
@@ -276,3 +281,23 @@ dropModels :: (MonadIO m) => SqlPersistT m ()
 dropModels = rawExecute
     "TRUNCATE TABLE user_account, dream RESTART IDENTITY"
     []
+
+-- | Raw SQL queries, for analytics
+-- see notes and test scripts in https://gist.github.com/lfborjas/2fd2d237d5600b392231ae2c472017bb
+mostCommonWords :: Int -> QueryM [(Single PersistValue, Single PersistValue)]
+mostCommonWords n = [sqlQQ|
+    select word, ndoc as occurences from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream$$)
+    order by ndoc desc limit #{n};
+|]
+
+dreamCounts :: Text -> QueryM [(Single PersistValue, Single PersistValue, Single PersistValue)]
+dreamCounts w = [sqlQQ| select count (dream.id) filter (where is_lucid = true) as are_lucid,
+                      count (dream.id) filter (where is_lucid = false) as arent_lucid,
+                      count (dream.id) filter (where is_nightmare = true) as are_nightmare
+                      from dream where to_tsvector (title || ' ' || description) @@ to_tsquery ('#{w}')|]
+
+mostCommonEmotions :: Int -> QueryM [(Single PersistValue, Single PersistValue)]
+mostCommonEmotions n = [sqlQQ|
+    select emotion, count (*) as c from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
+    group by emotion order by c desc limit #{n}
+|]
