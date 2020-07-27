@@ -83,13 +83,13 @@ spec = do
                 nena <- insert $ mkUser "nena@alpaca.net" "Nena" Female
                 charlie <- insert $ mkUser "charlie@alpaca.net" "Charlie" NonBinary
  
-                nenasDreams <- forM_ ["Dream 1", "Dream 2"] $ \title -> do
+                void $ forM_ ["Dream 1", "Dream 2"] $ \title -> do
                     let dream = mkDream nena title "description" ["joy"] zeroTime Nothing
                     insert_ dream
-                privateDreams <- forM_ ["Dream 3", "Dream 4"] $ \title -> do
+                void $ forM_ ["Dream 3", "Dream 4"] $ \title -> do
                     let privateDream = mkDream nena title "description" ["anger"] zeroTime $ Just (False, False, False, True, False)
                     insert_ privateDream
-                charlieDreams <- forM_ ["Dream 5"] $ \title -> do
+                void $ forM_ ["Dream 5"] $ \title -> do
                     insert_ $ mkDream charlie title "description" ["joy"] zeroTime Nothing
 
                 nenaDreams <- filteredDreams noDreamFilters $ Just (nena, False)
