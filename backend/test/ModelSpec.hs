@@ -11,7 +11,7 @@ import Control.Monad.Logger (NoLoggingT(..))
 import Database.Persist.Postgresql (insert_, toSqlKey, Entity(..), insert, SqlBackend)
 import Data.Password.Argon2 (hashPassword)
 import RIO.Time (fromGregorian, UTCTime(..))
-import Util (zeroTime)
+import Util (zeroTime, mkTime)
 import System.IO.Unsafe (unsafePerformIO)
 import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
 import Helpers
@@ -148,6 +148,30 @@ spec = do
                 liftIO $ dreamTitlesFor beginningOfJan `shouldBe` ["Third", "Second", "First"]
                 liftIO $ dreamTitlesFor onlyLatest `shouldBe` ["Millionth"]
                 liftIO $ dreamTitlesFor seenItBefore `shouldBe` ["Third", "Second"]
+
+    describe "keywordStats" $ do
+        it "finds the most common words in a range" $ do
+            run $ do
+                dreamer <- insert $ mkUser "dreamer@alpaca.net" "Dreamer" NonBinary
+                let aDream = mkDream dreamer
+                forM_ [("Winter", mkTime 2020 1 1, ["sadness"]), ("Summer", mkTime 2020 7 1, ["joy"])] $ \(t, d, e) -> do
+                    insert_ $ aDream t t e d Nothing
+
+                let expectedStats = KeywordStatsDB "winter" 0 0 0 1 "sadness"
+                winterStats <- keywordStats (Range (mkTime 2019 12 1) (mkTime 2020 6 1)) 10
+                liftIO $ winterStats `shouldBe` [expectedStats]
+
+    describe "emotionStats" $ do
+        it "finds the most common emotions in a range" $ do
+           run $ do
+                dreamer <- insert $ mkUser "dreamer@alpaca.net" "Dreamer" NonBinary
+                let aDream = mkDream dreamer
+                forM_ [("Winter", mkTime 2020 1 1, ["sadness"]), ("Summer", mkTime 2020 7 1, ["joy"])] $ \(t, d, e) -> do
+                    insert_ $ aDream t t e d Nothing
+
+                let expectedStats = EmotionStatsDB (EmotionLabel "sadness") 0 0 0 1
+                winterStats <- emotionStats (Range (mkTime 2019 12 1) (mkTime 2020 6 1)) 10
+                liftIO $ winterStats `shouldBe` [expectedStats]
 
 
 limitTo :: Int64 -> DreamFilters
