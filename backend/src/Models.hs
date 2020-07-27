@@ -290,7 +290,7 @@ data KeywordStatsDB = KeywordStatsDB {
 } deriving (Eq, Show)
 
 data EmotionStatsDB = EmotionStatsDB {
-    emotionName :: Text,
+    emotionName :: EmotionLabel,
     eLucidCount :: Int,
     eNightmareCount :: Int,
     eRecurringCount :: Int,
@@ -304,9 +304,9 @@ keywordStats range n = do
         forM topWords $ \((w, l, ni, r, t)) -> do
             perhapsEmotion <- topEmotionForKeyword range w
             if (not $ null perhapsEmotion) then
-                return $ Just $ (w,l,ni,r,t,(perhapsEmotion & head & fst))
+                pure $ Just $ (w,l,ni,r,t,(perhapsEmotion & head & fst))
             else
-                return Nothing
+                pure Nothing
     return $ map (\(w,l,ni,r,t,te)-> KeywordStatsDB w l ni r t (EmotionLabel te)) 
                  (catMaybes withEmotions)
 
@@ -314,7 +314,7 @@ emotionStats :: Range -> Int -> QueryM [EmotionStatsDB]
 emotionStats range n =
     (mostCommonEmotions range n) >>= mapM mkEmotionStats
     where
-        mkEmotionStats (e, l, ni, r, t) = return $ EmotionStatsDB e l ni r t
+        mkEmotionStats (e, l, ni, r, t) = pure $ EmotionStatsDB (EmotionLabel e) l ni r t
 
 {-
 SCARY RAW SQL ZONE
