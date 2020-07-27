@@ -20,6 +20,7 @@ import RIO.Text (pack, unpack, length)
 import Data.CaseInsensitive (CI)
 import qualified Data.CaseInsensitive as CI
 import Web.HttpApiData
+import RIO.Time (UTCTime)
 
 type Port = Int
 
@@ -170,3 +171,5 @@ instance FromJSON ZodiacSign
 instance ToJSON ZodiacSign
 instance FromHttpApiData ZodiacSign where
   parseUrlPiece = parseBoundedTextData
+
+data Range = Range {rangeStart :: UTCTime, rangeEnd :: UTCTime}

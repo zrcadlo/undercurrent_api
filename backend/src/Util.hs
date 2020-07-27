@@ -5,6 +5,7 @@ module Util
   ( plus2
   , dropPrefix
   , zeroTime
+  , mkTime
   ) where
 
 import RIO
@@ -19,3 +20,6 @@ dropPrefix p = drop (length $ p <> "_") . camelTo2 '_'
 
 zeroTime :: UTCTime
 zeroTime = UTCTime (fromGregorian 2020 7 7) 0
+
+mkTime :: Integer -> Int -> Int -> UTCTime
+mkTime y m d = UTCTime (fromGregorian y m d) 0

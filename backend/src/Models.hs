@@ -42,9 +42,7 @@ import           Database.Esqueleto.PostgreSQL.JSON
 import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
 import Util (zeroTime)
 import Database.Persist.Sql.Raw.QQ (sqlQQ)
-import Database.Persist.Sql (PersistValue, PersistField(..))
 import Database.Persist.Sql (Single(..))
-import RIO.Lens (each)
 import Database.Persist.Postgresql (runSqlConn)
 import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
 
@@ -287,6 +285,50 @@ sampleUser = UserAccount "nena@alpaca.com"
 instance ToSample UserAccount where
     toSamples _ = singleSample sampleUser
 
+
+
+-- | Ugly nuclear DB function only good for testing! 
+dropModels :: (MonadIO m) => SqlPersistT m ()
+dropModels = rawExecute
+    "TRUNCATE TABLE user_account, dream RESTART IDENTITY"
+    []
+
+data DreamStatsDB = DreamStatsDB {
+    keyword :: Text,
+    lucidCount :: Int,
+    nightmareCount :: Int,
+    recurringCount :: Int,
+    totalDreams :: Int,
+    topEmotion :: EmotionLabel
+} deriving (Eq, Show)
+
+data EmotionStatsDB = EmotionStatsDB {
+    emotionName :: Text,
+    eLucidCount :: Int,
+    eNightmareCount :: Int,
+    eRecurringCount :: Int,
+    eTotalDreams :: Int
+} deriving (Eq, Show)
+
+dreamStats :: Range -> Int -> QueryM [DreamStatsDB]
+dreamStats range n = do
+    topWords <- commonWordStats range n
+    withEmotions <- 
+        forM topWords $ \((w, l, ni, r, t)) -> do
+            perhapsEmotion <- topEmotionForKeyword range w
+            if (not $ null perhapsEmotion) then
+                return $ Just $ (w,l,ni,r,t,(perhapsEmotion & head & fst))
+            else
+                return Nothing
+    return $ map (\(w,l,ni,r,t,te)-> DreamStatsDB w l ni r t (EmotionLabel te)) 
+                 (catMaybes withEmotions)
+
+emotionStats :: Range -> Int -> QueryM [EmotionStatsDB]
+emotionStats range n =
+    (mostCommonEmotions range n) >>= mapM mkEmotionStats
+    where
+        mkEmotionStats (e, l, ni, r, t) = return $ EmotionStatsDB e l ni r t
+
 {-
 SCARY RAW SQL ZONE
 
@@ -295,56 +337,72 @@ TYPE SAFETY IS FRAGILE HERE
 TREAD LIGHTLY!
 -}
 
--- | Ugly nuclear DB function only good for testing! 
-dropModels :: (MonadIO m) => SqlPersistT m ()
-dropModels = rawExecute
-    "TRUNCATE TABLE user_account, dream RESTART IDENTITY"
-    []
-
 -- | Get tuples of word => occurences, up to N most common words
 -- see notes and test scripts in https://gist.github.com/lfborjas/2fd2d237d5600b392231ae2c472017bb
 -- for easy REPL testing, with `stack ghci`, e.g.
 -- *> w <- runDBSimple "postgresql://localhost/undercurrent_dev?user=luis" $ mostCommonWords 3
 -- yields
 -- [("recurring",1728),("prophecy",1728),("smol",1728)]
-mostCommonWords :: Int -> QueryM [(Text, Int)]
-mostCommonWords n = [sqlQQ|
-    select word, ndoc as occurences 
-    from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream$$)
-    order by ndoc desc limit #{n};
-|] & (fmap . map) (\(a,b)-> (unSingle a :: Text, unSingle b :: Int)) 
-
-dreamCounts :: Text -> QueryM [(Int, Int, Int, Int)]
-dreamCounts w = [sqlQQ| 
-    select 
-        count (dream.id) filter (where is_lucid = true) as are_lucid,
+commonWordStats :: Range -> Int -> QueryM [(Text, Int, Int, Int, Int)]
+commonWordStats (Range start end) n = [sqlQQ|
+    select c.word, 
+    count (dream.id) filter (where is_lucid = true) as are_lucid,
         count (dream.id) filter (where is_nightmare = true) as are_nightmare,
         count (dream.id) filter (where is_recurring = true) as are_recurring,
-        count (*) as total_dreams
-    from dream 
-    where to_tsvector (title || ' ' || description) @@ to_tsquery (#{w})
-|] & (fmap . map) asCounts
+        count (*) as total_dreams 
+    from dream join 
+        (select word, ndoc from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream$$)) as c
+        on to_tsvector ('english_simple', title || ' ' || description) @@ to_tsquery('english_simple', c.word)
+    where dreamed_at between #{start} and #{end} group by c.word order by total_dreams desc
+    limit #{n};
+|] & (fmap . map) asStats
     where
-        asCounts ((Single lucid), (Single nightmare), (Single recurring), (Single total)) =
-            let t = total::Int
-                l = (lucid::Int) 
-                n = (nightmare::Int)
-                r = (recurring::Int) 
-                
-            in
-            (l,n,r,t)
+        asStats ((Single word), 
+                (Single lucid), 
+                (Single nightmare), 
+                (Single recurring), 
+                (Single total)) =
+                    (word, lucid, nightmare, recurring, total)
+
+topEmotionForKeyword :: Range -> Text -> QueryM [(Text, Int)]
+topEmotionForKeyword (Range start end) w = [sqlQQ|
+    select emotion #>> '{}', count (*) as c from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
+    where to_tsvector ('english_simple', title || ' ' || description) @@ to_tsquery ('english_simple', #{w})
+    and dreamed_at between #{start} and #{end}
+    group by emotion order by c desc limit 1
+|] & (fmap . map) (\(word, count) -> (unSingle word :: Text, unSingle count :: Int))
 
 -- `emotion` is returned as a json value, and as such, it's quoted in the DB.
 -- the `#>>` operator will extract it as actual text:
 -- https://www.postgresql.org/docs/current/functions-json.html#FUNCTIONS-JSON-OP-TABLE
-mostCommonEmotions :: Int -> QueryM [(Text, Int)]
-mostCommonEmotions n = [sqlQQ|
-    select emotion #>> '{}', count (*) as c from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
-    group by emotion order by c desc limit #{n}
-|] & (fmap . map) (\(a,b) -> (unSingle a :: Text, unSingle b :: Int))
+mostCommonEmotions :: Range -> Int -> QueryM [(Text, Int, Int, Int, Int)]
+mostCommonEmotions (Range start end) n = [sqlQQ|
+    select emotion #>> '{}', 
+        count (dream.id) filter (where is_lucid = true) as are_lucid,
+        count (dream.id) filter (where is_nightmare = true) as are_nightmare,
+        count (dream.id) filter (where is_recurring = true) as are_recurring,
+        count (*) as total_dreams
+    from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
+    where dreamed_at between #{start} and #{end}
+    group by emotion order by total_dreams desc limit #{n}
+|] & (fmap . map) (\(a,b,c,d,e) -> 
+    (unSingle a :: Text, unSingle b :: Int, unSingle c :: Int, unSingle d :: Int, unSingle e :: Int))
 
-topEmotionForKeyword :: Text -> QueryM [(Text, Int)]
-topEmotionForKeyword w = [sqlQQ|
-    select emotion #>> '{}', count (*) as c from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
-    where to_tsvector (title || ' ' || description) @@ to_tsquery (#{w}) group by emotion order by c desc limit 1
-|] & (fmap . map) (\(word, count) -> (unSingle word :: Text, unSingle count :: Int))
+{-
+Some more notes at:
+https://gist.github.com/lfborjas/2fd2d237d5600b392231ae2c472017bb
+
+an interesting reject: 
+
+ select word, e, count from 
+ (select distinct on (c.word) c.word, emotion #>> '{}' as e, count(*)        
+  from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion                       
+  join (select word, ndoc from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream$$)) as c                        
+  on to_tsvector ('english_simple', title || ' ' || description) @@ to_tsquery('english_simple', c.word)                   
+  and dreamed_at between '2020-01-01' and '2020-07-02'                                                                      
+  group by c.word, e                                                                                                      
+  order by c.word, count(*) desc                                                                                           
+ ) t 
+ order by count desc limit 10;                                                                                                                     
+
+-}
