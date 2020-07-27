@@ -11,4 +11,4 @@ ALTER  TEXT SEARCH CONFIGURATION english_simple
    ALTER MAPPING FOR asciiword WITH english_simple_dict;
 
 -- index to speed up the common "stats" search:
-CREATE INDEX word_cloud_index ON dream USING GIN (to_tsvector('english_simple', title || ' ' || description));
+CREATE INDEX IF NOT EXISTS word_cloud_index ON dream USING GIN (to_tsvector('english_simple', title || ' ' || description));

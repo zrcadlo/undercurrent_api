@@ -39,7 +39,7 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as E
 --import qualified Database.Esqueleto.PostgreSQL as E
 import           Database.Esqueleto.PostgreSQL.JSON
                                                 ( JSONB )
-import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
+import Database.Esqueleto.Internal.Sql (unsafeSqlValue, unsafeSqlBinOp, unsafeSqlFunction)
 import Util (zeroTime)
 import Database.Persist.Sql.Raw.QQ (sqlQQ)
 import Database.Persist.Sql (Single(..))
@@ -113,11 +113,17 @@ runDBSimple conStr query =
     runNoLoggingT $ withPostgresqlConn conStr $ runSqlConn query
 
 
+-- | Default dictionary for all text searches. We currently support English only,
+-- but may create a different one if necessary. Note that we also have `english_simple`
+-- for statistics (see indexes at 202007271200_text_search_config.sql)
+defaultTextSearchDictionary :: E.SqlExpr (E.Value String)
+defaultTextSearchDictionary = unsafeSqlValue "\'english\'"
 
 -- | Custom operators and functions
 -- as per: https://github.com/bitemyapp/esqueleto/tree/4dbd5339adf99e1f045c0a02211a03c79032f9cf#unsafe-functions-operators-and-values
 tsVector :: E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s)
-tsVector v = unsafeSqlFunction "to_tsvector" v
+tsVector v = unsafeSqlFunction "to_tsvector" (defaultTextSearchDictionary, v)
+
 
 {-| Generate a standardize tsquery based on unsanitized input.
     not using to_tsquery since innocent strings like `"fear the cat"`
@@ -131,7 +137,7 @@ tsVector v = unsafeSqlFunction "to_tsvector" v
     * -: the logical not operator, converted to the the ! operator.
 -}
 webTsQuery :: E.SqlExpr (E.Value Text) -> E.SqlExpr (E.Value Text)
-webTsQuery q = unsafeSqlFunction "websearch_to_tsquery" q
+webTsQuery q = unsafeSqlFunction "websearch_to_tsquery" (defaultTextSearchDictionary, q)
 
 -- from:
 -- https://github.com/bitemyapp/esqueleto/pull/119/files
@@ -235,7 +241,6 @@ filteredDreams DreamFilters{..} userConditions = do
         maybeNoConditions (\n -> E.where_ (dream E.^. DreamIsNightmare E.==. E.val n)) filterNightmare
         maybeNoConditions (\r -> E.where_ (dream E.^. DreamIsRecurring E.==. E.val r)) filterRecurring
         maybeNoConditions (\es -> E.where_ (E.just (dream E.^. DreamEmotions) E.@>. (E.jsonbVal es))) filterEmotions
-        -- TODO: need an index!
         -- more info on full text queries:
         -- https://www.postgresql.org/docs/current/textsearch-tables.html
         maybeNoConditions
