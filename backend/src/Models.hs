@@ -260,14 +260,6 @@ filteredDreams DreamFilters{..} userConditions = do
         E.orderBy [ E.desc (dream E.^. DreamId) ]
         return (dream, userAccount)
 
-userDreams
-    :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
-    => Key UserAccount
-    -> Bool
-    -> m [(Entity Dream, Entity UserAccount)]
-userDreams u o = runDB $ filteredDreams noDreamFilters $ Just (u, o)
-
-
 -- | Documentation helpers
 
 -- TODO: the day approaches where it's obvious we need an "application" version of UserAccount.
@@ -286,14 +278,9 @@ instance ToSample UserAccount where
     toSamples _ = singleSample sampleUser
 
 
+-- | Ad-hoc queries
 
--- | Ugly nuclear DB function only good for testing! 
-dropModels :: (MonadIO m) => SqlPersistT m ()
-dropModels = rawExecute
-    "TRUNCATE TABLE user_account, dream RESTART IDENTITY"
-    []
-
-data DreamStatsDB = DreamStatsDB {
+data KeywordStatsDB = KeywordStatsDB {
     keyword :: Text,
     lucidCount :: Int,
     nightmareCount :: Int,
@@ -310,8 +297,8 @@ data EmotionStatsDB = EmotionStatsDB {
     eTotalDreams :: Int
 } deriving (Eq, Show)
 
-dreamStats :: Range -> Int -> QueryM [DreamStatsDB]
-dreamStats range n = do
+keywordStats :: Range -> Int -> QueryM [KeywordStatsDB]
+keywordStats range n = do
     topWords <- commonWordStats range n
     withEmotions <- 
         forM topWords $ \((w, l, ni, r, t)) -> do
@@ -320,7 +307,7 @@ dreamStats range n = do
                 return $ Just $ (w,l,ni,r,t,(perhapsEmotion & head & fst))
             else
                 return Nothing
-    return $ map (\(w,l,ni,r,t,te)-> DreamStatsDB w l ni r t (EmotionLabel te)) 
+    return $ map (\(w,l,ni,r,t,te)-> KeywordStatsDB w l ni r t (EmotionLabel te)) 
                  (catMaybes withEmotions)
 
 emotionStats :: Range -> Int -> QueryM [EmotionStatsDB]
@@ -406,3 +393,9 @@ an interesting reject:
  order by count desc limit 10;                                                                                                                     
 
 -}
+
+-- | Ugly nuclear DB function only good for testing! 
+dropModels :: (MonadIO m) => SqlPersistT m ()
+dropModels = rawExecute
+    "TRUNCATE TABLE user_account, dream RESTART IDENTITY"
+    []
