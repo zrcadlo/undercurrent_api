@@ -342,10 +342,14 @@ commonWordStats (Range start end) n = [sqlQQ|
         count (dream.id) filter (where is_nightmare = true) as are_nightmare,
         count (dream.id) filter (where is_recurring = true) as are_recurring,
         count (*) as total_dreams 
-    from dream join 
-        (select word, ndoc from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream$$)) as c
+    from dream join
+        (select word, ndoc from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream
+        where dreamed_at between #{start} and #{end}$$)
+        order by ndoc desc limit #{n}) as c
         on to_tsvector ('english_simple', title || ' ' || description) @@ to_tsquery('english_simple', c.word)
-    where dreamed_at between #{start} and #{end} group by c.word order by total_dreams desc
+    where dreamed_at between #{start} and #{end}
+    group by c.word
+    order by total_dreams desc
     limit #{n};
 |] & (fmap . map) asStats
     where
