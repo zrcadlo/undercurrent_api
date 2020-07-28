@@ -2,6 +2,7 @@
 -- DREAM INDICES
 --
 CREATE INDEX IF NOT EXISTS idx_dreamed_at ON dream(dreamed_at);
+CREATE INDEX IF NOT EXISTS idx_dreamer_id ON dream(user_id);
 
 -- to ensure usage of this index, operations _must_ explicitly use the `english` config:
 -- https://www.postgresql.org/docs/12/textsearch-tables.html#TEXTSEARCH-TABLES-INDEX

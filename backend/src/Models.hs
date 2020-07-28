@@ -260,8 +260,8 @@ filteredDreams DreamFilters{..} userConditions = do
         maybeNoConditions (\after -> E.where_ (dream E.^. DreamDreamedAt  E.>=. E.val after)) filterAfter
         -- keyset pagination
         maybeNoConditions (\lastSeen -> E.where_(dream E.^. DreamId E.<. E.val lastSeen)) filterLastSeenId
-        -- default page size is 200, max is 1000.
-        E.limit $ maybe 200 (\l-> if l > 1000 then 1000 else l) filterLimit
+        -- default page size is 100, max is 1000.
+        E.limit $ maybe 100 (\l-> if l > 1000 then 1000 else l) filterLimit
         E.orderBy [ E.desc (dream E.^. DreamId) ]
         return (dream, userAccount)
 
