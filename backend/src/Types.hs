@@ -21,8 +21,6 @@ import Data.CaseInsensitive (CI)
 import qualified Data.CaseInsensitive as CI
 import Web.HttpApiData
 import RIO.Time (UTCTime)
-import RIO.ByteString.Lazy (toStrict)
-import Database.Esqueleto.Internal.Sql (unsafeSqlValue)
 
 type Port = Int
 
@@ -180,9 +178,20 @@ data Mayhaps = Perchance | Definitely
   deriving (Show, Eq, Generic, Bounded, Enum)
 
 instance PersistField Mayhaps where
-  toPersistValue m = PersistDbSpecific . encodeUtf8 . toUpper . pack  . show $ m
-  fromPersistValue (PersistDbSpecific t) = parseBoundedTextData $ decodeUtf8Lenient t
-  fromPersistValue _ = Left "Only Postgres Enums supported"
+  toPersistValue = toPersistValueEnum
+  fromPersistValue = fromPersistValueEnum
 
 instance PersistFieldSql Mayhaps where
   sqlType _ = SqlOther "mayhaps"
+
+
+-- inspired by:
+-- https://github.com/yesodweb/persistent/blob/10f689371345ec20edf0d7e8d776f7f4bc4a187b/persistent-template/Database/Persist/TH.hs#L1575
+-- https://bitemyapp.com/blog/uuids-with-persistent-yesod/
+-- https://github.com/yesodweb/persistent/blob/be8901eac2714e09a083c0d46bb9a2073650c497/persistent-postgresql/Database/Persist/Postgresql/JSON.hs#L325
+toPersistValueEnum :: (Show e) => e -> PersistValue
+toPersistValueEnum e = PersistDbSpecific . encodeUtf8 . toUpper . pack . show $ e
+
+fromPersistValueEnum :: (Show e, Enum e, Bounded e) => PersistValue -> Either Text e
+fromPersistValueEnum (PersistDbSpecific e) = parseBoundedTextData $ decodeUtf8Lenient e
+fromPersistValueEnum _ = Left "Only Postgres Enums Supported"
