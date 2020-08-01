@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -19,7 +20,7 @@ import           Database.Persist.TH            ( share
                                                 , persistLowerCase
                                                 )
 import           RIO.Time                       ( UTCTime )
-import           Database.Persist.Postgresql    (Key
+import           Database.Persist.Postgresql    (withPostgresqlConn, ConnectionString, Key
                                                 , Entity(..)
                                                 , SqlPersistT
                                                 , rawExecute
@@ -38,9 +39,15 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as E
 --import qualified Database.Esqueleto.PostgreSQL as E
 import           Database.Esqueleto.PostgreSQL.JSON
                                                 ( JSONB )
-import Database.Esqueleto.Internal.Sql (unsafeSqlBinOp, unsafeSqlFunction)
+import Database.Esqueleto.Internal.Sql (unsafeSqlValue, unsafeSqlBinOp, unsafeSqlFunction)
 import Util (zeroTime)
+import Database.Persist.Sql.Raw.QQ (sqlQQ)
+import Database.Persist.Sql (Single(..))
+import Database.Persist.Postgresql (runSqlConn)
+import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
 
+type DBM m a = (MonadIO m) => ReaderT SqlBackend m a
+type QueryM a = forall m. DBM m a
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
     UserAccount
@@ -97,11 +104,26 @@ runDB query = do
     pool <- view dbConnectionPoolL
     liftIO $ runSqlPool query pool
 
+runDBSimple
+    :: (MonadIO m, MonadUnliftIO m)
+    => ConnectionString
+    -> ReaderT SqlBackend (NoLoggingT m) b
+    -> m b
+runDBSimple conStr query = 
+    runNoLoggingT $ withPostgresqlConn conStr $ runSqlConn query
+
+
+-- | Default dictionary for all text searches. We currently support English only,
+-- but may create a different one if necessary. Note that we also have `english_simple`
+-- for statistics (see indexes at 202007271200_text_search_config.sql)
+defaultTextSearchDictionary :: E.SqlExpr (E.Value String)
+defaultTextSearchDictionary = unsafeSqlValue "\'english\'"
 
 -- | Custom operators and functions
 -- as per: https://github.com/bitemyapp/esqueleto/tree/4dbd5339adf99e1f045c0a02211a03c79032f9cf#unsafe-functions-operators-and-values
 tsVector :: E.SqlExpr (E.Value s) -> E.SqlExpr (E.Value s)
-tsVector v = unsafeSqlFunction "to_tsvector" v
+tsVector v = unsafeSqlFunction "to_tsvector" (defaultTextSearchDictionary, v)
+
 
 {-| Generate a standardize tsquery based on unsanitized input.
     not using to_tsquery since innocent strings like `"fear the cat"`
@@ -115,7 +137,7 @@ tsVector v = unsafeSqlFunction "to_tsvector" v
     * -: the logical not operator, converted to the the ! operator.
 -}
 webTsQuery :: E.SqlExpr (E.Value Text) -> E.SqlExpr (E.Value Text)
-webTsQuery q = unsafeSqlFunction "websearch_to_tsquery" q
+webTsQuery q = unsafeSqlFunction "websearch_to_tsquery" (defaultTextSearchDictionary, q)
 
 -- from:
 -- https://github.com/bitemyapp/esqueleto/pull/119/files
@@ -183,10 +205,9 @@ noDreamFilters = DreamFilters
     Nothing
 
 filteredDreams
-    :: (MonadIO m)
-    => DreamFilters
+    :: DreamFilters
     -> (Maybe (Key UserAccount, Bool))
-    -> ReaderT SqlBackend m [(Entity Dream, Entity UserAccount)]
+    -> QueryM [(Entity Dream, Entity UserAccount)]
 filteredDreams DreamFilters{..} userConditions = do
     let maybeNoConditions = maybe (return ())
     E.select . E.from $ \(dream `E.InnerJoin` userAccount) -> do
@@ -220,7 +241,6 @@ filteredDreams DreamFilters{..} userConditions = do
         maybeNoConditions (\n -> E.where_ (dream E.^. DreamIsNightmare E.==. E.val n)) filterNightmare
         maybeNoConditions (\r -> E.where_ (dream E.^. DreamIsRecurring E.==. E.val r)) filterRecurring
         maybeNoConditions (\es -> E.where_ (E.just (dream E.^. DreamEmotions) E.@>. (E.jsonbVal es))) filterEmotions
-        -- TODO: need an index!
         -- more info on full text queries:
         -- https://www.postgresql.org/docs/current/textsearch-tables.html
         maybeNoConditions
@@ -240,18 +260,10 @@ filteredDreams DreamFilters{..} userConditions = do
         maybeNoConditions (\after -> E.where_ (dream E.^. DreamDreamedAt  E.>=. E.val after)) filterAfter
         -- keyset pagination
         maybeNoConditions (\lastSeen -> E.where_(dream E.^. DreamId E.<. E.val lastSeen)) filterLastSeenId
-        -- default page size is 200, max is 1000.
-        E.limit $ maybe 200 (\l-> if l > 1000 then 1000 else l) filterLimit
+        -- default page size is 100, max is 1000.
+        E.limit $ maybe 100 (\l-> if l > 1000 then 1000 else l) filterLimit
         E.orderBy [ E.desc (dream E.^. DreamId) ]
         return (dream, userAccount)
-
-userDreams
-    :: (MonadReader s m, HasDBConnectionPool s, MonadIO m)
-    => Key UserAccount
-    -> Bool
-    -> m [(Entity Dream, Entity UserAccount)]
-userDreams u o = runDB $ filteredDreams noDreamFilters $ Just (u, o)
-
 
 -- | Documentation helpers
 
@@ -270,8 +282,128 @@ sampleUser = UserAccount "nena@alpaca.com"
 instance ToSample UserAccount where
     toSamples _ = singleSample sampleUser
 
--- | Concessions to testing
 
+-- | Ad-hoc queries
+
+data KeywordStatsDB = KeywordStatsDB {
+    keyword :: Text,
+    lucidCount :: Int,
+    nightmareCount :: Int,
+    recurringCount :: Int,
+    totalDreams :: Int,
+    topEmotion :: EmotionLabel
+} deriving (Eq, Show)
+
+data EmotionStatsDB = EmotionStatsDB {
+    emotionName :: EmotionLabel,
+    eLucidCount :: Int,
+    eNightmareCount :: Int,
+    eRecurringCount :: Int,
+    eTotalDreams :: Int
+} deriving (Eq, Show)
+
+keywordStats :: Range -> Int -> QueryM [KeywordStatsDB]
+keywordStats range n = do
+    topWords <- commonWordStats range n
+    withEmotions <- 
+        forM topWords $ \((w, l, ni, r, t)) -> do
+            perhapsEmotion <- topEmotionForKeyword range w
+            if (not $ null perhapsEmotion) then
+                pure $ Just $ (w,l,ni,r,t,(perhapsEmotion & head & fst))
+            else
+                pure Nothing
+    return $ map (\(w,l,ni,r,t,te)-> KeywordStatsDB w l ni r t (EmotionLabel te)) 
+                 (catMaybes withEmotions)
+
+emotionStats :: Range -> Int -> QueryM [EmotionStatsDB]
+emotionStats range n =
+    (mostCommonEmotions range n) >>= mapM mkEmotionStats
+    where
+        mkEmotionStats (e, l, ni, r, t) = pure $ EmotionStatsDB (EmotionLabel e) l ni r t
+
+{-
+SCARY RAW SQL ZONE
+
+TYPE SAFETY IS FRAGILE HERE
+
+TREAD LIGHTLY!
+-}
+
+-- | Get tuples of word => occurences, up to N most common words
+-- see notes and test scripts in https://gist.github.com/lfborjas/2fd2d237d5600b392231ae2c472017bb
+-- for easy REPL testing, with `stack ghci`, e.g.
+-- *> w <- runDBSimple "postgresql://localhost/undercurrent_dev?user=luis" $ mostCommonWords 3
+-- yields
+-- [("recurring",1728),("prophecy",1728),("smol",1728)]
+commonWordStats :: Range -> Int -> QueryM [(Text, Int, Int, Int, Int)]
+commonWordStats (Range start end) n = [sqlQQ|
+    select c.word, 
+    count (dream.id) filter (where is_lucid = true) as are_lucid,
+        count (dream.id) filter (where is_nightmare = true) as are_nightmare,
+        count (dream.id) filter (where is_recurring = true) as are_recurring,
+        count (*) as total_dreams 
+    from dream join
+        (select word, ndoc from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream
+        where dreamed_at between #{start} and #{end}$$)
+        order by ndoc desc limit #{n}) as c
+        on to_tsvector ('english_simple', title || ' ' || description) @@ to_tsquery('english_simple', c.word)
+    where dreamed_at between #{start} and #{end}
+    group by c.word
+    order by total_dreams desc
+    limit #{n};
+|] & (fmap . map) asStats
+    where
+        asStats ((Single word), 
+                (Single lucid), 
+                (Single nightmare), 
+                (Single recurring), 
+                (Single total)) =
+                    (word, lucid, nightmare, recurring, total)
+
+topEmotionForKeyword :: Range -> Text -> QueryM [(Text, Int)]
+topEmotionForKeyword (Range start end) w = [sqlQQ|
+    select emotion #>> '{}', count (*) as c from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
+    where to_tsvector ('english_simple', title || ' ' || description) @@ to_tsquery ('english_simple', #{w})
+    and dreamed_at between #{start} and #{end}
+    group by emotion order by c desc limit 1
+|] & (fmap . map) (\(word, count) -> (unSingle word :: Text, unSingle count :: Int))
+
+-- `emotion` is returned as a json value, and as such, it's quoted in the DB.
+-- the `#>>` operator will extract it as actual text:
+-- https://www.postgresql.org/docs/current/functions-json.html#FUNCTIONS-JSON-OP-TABLE
+mostCommonEmotions :: Range -> Int -> QueryM [(Text, Int, Int, Int, Int)]
+mostCommonEmotions (Range start end) n = [sqlQQ|
+    select emotion #>> '{}', 
+        count (dream.id) filter (where is_lucid = true) as are_lucid,
+        count (dream.id) filter (where is_nightmare = true) as are_nightmare,
+        count (dream.id) filter (where is_recurring = true) as are_recurring,
+        count (*) as total_dreams
+    from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
+    where dreamed_at between #{start} and #{end}
+    group by emotion order by total_dreams desc limit #{n}
+|] & (fmap . map) (\(a,b,c,d,e) -> 
+    (unSingle a :: Text, unSingle b :: Int, unSingle c :: Int, unSingle d :: Int, unSingle e :: Int))
+
+{-
+Some more notes at:
+https://gist.github.com/lfborjas/2fd2d237d5600b392231ae2c472017bb
+
+an interesting reject: 
+
+ select word, e, count from 
+ (select distinct on (c.word) c.word, emotion #>> '{}' as e, count(*)        
+  from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion                       
+  join (select word, ndoc from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream$$)) as c                        
+  on to_tsvector ('english_simple', title || ' ' || description) @@ to_tsquery('english_simple', c.word)                   
+  and dreamed_at between '2020-01-01' and '2020-07-02'                                                                      
+  group by c.word, e                                                                                                      
+  order by c.word, count(*) desc                                                                                           
+ ) t 
+ order by count desc limit 10;                                                                                                                     
+
+-}
+
+-- | Ugly nuclear DB function only good for testing! 
 dropModels :: (MonadIO m) => SqlPersistT m ()
 dropModels = rawExecute
     "TRUNCATE TABLE user_account, dream RESTART IDENTITY"

@@ -36,7 +36,8 @@ main = do
   env <- decodeWithDefaults defaultConfig
   jwtKey <- readKey $ jwtPath env
   pool <- makeDBConnectionPool $ databaseUrl env
-  withLogFunc lo $ \lf ->
+  let logOptions = setLogUseTime True lo
+  withLogFunc logOptions $ \lf ->
     let app = App
           { appLogFunc = lf
           , appPort = port env
