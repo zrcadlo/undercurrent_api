@@ -16,11 +16,13 @@ import Database.Persist.TH (derivePersistField)
 import Data.Aeson.Types
 import Database.Persist.Postgresql (PersistFieldSql(..), ConnectionPool)
 import Database.Persist (PersistField(..), PersistValue(..), SqlType(SqlOther))
-import RIO.Text (pack, unpack, length)
+import RIO.Text (toUpper, pack, unpack, length)
 import Data.CaseInsensitive (CI)
 import qualified Data.CaseInsensitive as CI
 import Web.HttpApiData
 import RIO.Time (UTCTime)
+import RIO.ByteString.Lazy (toStrict)
+import Database.Esqueleto.Internal.Sql (unsafeSqlValue)
 
 type Port = Int
 
@@ -173,3 +175,14 @@ instance FromHttpApiData ZodiacSign where
   parseUrlPiece = parseBoundedTextData
 
 data Range = Range {rangeStart :: UTCTime, rangeEnd :: UTCTime}
+
+data Mayhaps = Perchance | Definitely
+  deriving (Show, Eq, Generic, Bounded, Enum)
+
+instance PersistField Mayhaps where
+  toPersistValue m = PersistDbSpecific . encodeUtf8 . toUpper . pack  . show $ m
+  fromPersistValue (PersistDbSpecific t) = parseBoundedTextData $ decodeUtf8Lenient t
+  fromPersistValue _ = Left "Only Postgres Enums supported"
+
+instance PersistFieldSql Mayhaps where
+  sqlType _ = SqlOther "mayhaps"
