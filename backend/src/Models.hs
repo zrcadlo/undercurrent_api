@@ -78,10 +78,6 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
         createdAt UTCTime default=now()
         updatedAt UTCTime default=now()
         deriving Eq Show
-
-    TestingEnums
-        certainty Mayhaps
-        deriving Eq Show
 |]
 
 -- manually rolling out the JSON instance for UserAccount to avoid exposing the password.

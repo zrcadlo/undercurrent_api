@@ -12,7 +12,6 @@ module Types where
 import           GHC.Generics
 import           RIO
 import           System.Envy
-import Database.Persist.TH (derivePersistField)
 import Data.Aeson.Types
 import Database.Persist.Postgresql (PersistFieldSql(..), ConnectionPool)
 import Database.Persist (PersistField(..), PersistValue(..), SqlType(SqlOther))
@@ -94,11 +93,19 @@ instance (FromJSON (CI Text)) where
 
 data Gender = Female | Male | NonBinary
       deriving (Show, Read, Eq, Generic, Bounded, Enum)
-derivePersistField "Gender"
+
 instance ToJSON Gender
 instance FromJSON Gender
+
 instance FromHttpApiData Gender where
   parseUrlPiece = parseBoundedTextData
+
+instance PersistField Gender where
+  toPersistValue = toPersistValueEnum
+  fromPersistValue = fromPersistValueEnum
+
+instance PersistFieldSql Gender where
+  sqlType _ = SqlOther "gender"
 
 emotionLabels :: [Text]
 emotionLabels = ["joy", "trust", "anticipation", "surprise", "disgust", "sadness", "fear", "anger", "acceptance", "admiration", "affection", "annoyance", "alienation", "amazement", "anxiety", "apathy", "awe", "betrayal", "bitter", "bold", "boredom", "bravery", "brooding", "calm", "cautious", "cheerful", "comfortable", "confused", "cranky", "crushed", "curious", "denial", "despair", "disappointed", "distress", "drained", "eager", "embarassed", "empty", "energized", "envy", "excited", "foreboding", "fulfilled", "grateful", "guilt", "hatred", "shame", "helpless", "hollow", "hopeful", "humiliated", "hurt", "inspired", "intimidated", "irritated", "jealous", "lazy", "lonely", "longing", "love", "lust", "mellow", "nervous", "numb", "panic", "paranoia", "peaceful", "pity", "powerful", "powerless", "protective", "proud", "reluctance", "remorse", "resentment", "self-conscious", "sensitive", "shock", "sick", "shy", "stressed", "tired", "alert", "vigilant", "weary", "worry"]
@@ -166,7 +173,13 @@ data ZodiacSign =
     | Pisces
     deriving (Show, Read, Eq, Generic, Bounded, Enum)
 
-derivePersistField "ZodiacSign"
+instance PersistField ZodiacSign where
+  toPersistValue = toPersistValueEnum
+  fromPersistValue = fromPersistValueEnum
+
+instance PersistFieldSql ZodiacSign where
+  sqlType _ = SqlOther "zodiac_sign"
+
 instance FromJSON ZodiacSign
 instance ToJSON ZodiacSign
 instance FromHttpApiData ZodiacSign where
@@ -174,18 +187,6 @@ instance FromHttpApiData ZodiacSign where
 
 data Range = Range {rangeStart :: UTCTime, rangeEnd :: UTCTime}
 
-data Mayhaps = Perchance | Definitely
-  deriving (Show, Eq, Generic, Bounded, Enum)
-
-instance PersistField Mayhaps where
-  toPersistValue = toPersistValueEnum
-  fromPersistValue = fromPersistValueEnum
-
-instance PersistFieldSql Mayhaps where
-  sqlType _ = SqlOther "mayhaps"
-
-
--- inspired by:
 -- https://github.com/yesodweb/persistent/blob/10f689371345ec20edf0d7e8d776f7f4bc4a187b/persistent-template/Database/Persist/TH.hs#L1575
 -- https://bitemyapp.com/blog/uuids-with-persistent-yesod/
 -- https://github.com/yesodweb/persistent/blob/be8901eac2714e09a083c0d46bb9a2073650c497/persistent-postgresql/Database/Persist/Postgresql/JSON.hs#L325
