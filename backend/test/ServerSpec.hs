@@ -156,12 +156,12 @@ spec =
         describe "PUT /api/user/password" $ do
             it "responds with 403 if given the wrong password" $ do
                 authenticatedPut "/api/user/password" currentUserToken
-                    [json|{currentPassword: "notTheRightOne", newPassword: "aNewOne"}|]
+                    [json|{current_password: "notTheRightOne", new_password: "aNewOne"}|]
                     `shouldRespondWith` 403
             
             it "responds with 204 if given the right password" $ do
                 authenticatedPut "/api/user/password" currentUserToken
-                    [json|{currentPassword: "secureAlpacaPassword", newPassword: "aNewPassword"}|]
+                    [json|{current_password: "secureAlpacaPassword", new_password: "aNewPassword"}|]
                     `shouldRespondWith` 204
 
         describe "POST /api/users" $ do
@@ -508,7 +508,19 @@ spec =
 
                     get "/api/dreams?emotions=joy&emotions=joy2"
                         `shouldRespondWith` "Error parsing query parameter(s) emotions failed: joy2 is not an emotion known to our database!" {matchStatus = 400}
-                    
+
+        describe "GET /api/stats" $ do
+            -- TODO: more contexts!
+            context "public stats" $ do
+                it "gets top keywords and emotions for a sample of all dreams" $ do
+                    let statsForAll = [json|
+                        {
+                          "top_emotions":[{"recurring_count":3,"nightmare_count":0,"lucid_count":0,"total_dreams":3,"name":"joy"},{"recurring_count":2,"nightmare_count":1,"lucid_count":0,"total_dreams":2,"name":"worry"},{"recurring_count":1,"nightmare_count":1,"lucid_count":0,"total_dreams":1,"name":"vigilant"},{"recurring_count":1,"nightmare_count":0,"lucid_count":0,"total_dreams":1,"name":"intimidated"},{"recurring_count":1,"nightmare_count":0,"lucid_count":0,"total_dreams":1,"name":"surprise"}],
+                          "top_keywords":[{"recurring_count":4,"nightmare_count":1,"lucid_count":0,"total_dreams":4,"top_emotion":"joy","keyword":"dream"},{"recurring_count":3,"nightmare_count":1,"lucid_count":0,"total_dreams":3,"top_emotion":"joy","keyword":"dreams"},{"recurring_count":2,"nightmare_count":1,"lucid_count":0,"total_dreams":2,"top_emotion":"joy","keyword":"charlie"},{"recurring_count":1,"nightmare_count":1,"lucid_count":0,"total_dreams":1,"top_emotion":"worry","keyword":"secret"},{"recurring_count":1,"nightmare_count":0,"lucid_count":0,"total_dreams":1,"top_emotion":"joy","keyword":"sunglasses"},{"recurring_count":1,"nightmare_count":0,"lucid_count":0,"total_dreams":1,"top_emotion":"joy","keyword":"alpacas"},{"recurring_count":1,"nightmare_count":0,"lucid_count":0,"total_dreams":1,"top_emotion":"joy","keyword":"wearing"},{"recurring_count":1,"nightmare_count":0,"lucid_count":0,"total_dreams":1,"top_emotion":"joy","keyword":"charlies"},{"recurring_count":1,"nightmare_count":0,"lucid_count":0,"total_dreams":1,"top_emotion":"joy","keyword":"nena"}]
+                        }
+                    |]
+                    get "/api/stats"
+                        `shouldRespondWith` statsForAll {matchStatus = 200}
         where
             makeToken :: AuthenticatedUser -> ByteString
             makeToken u = toStrict $ fromRight "bad-token" $ unsafePerformIO $ (makeJWT u jwtCfg Nothing)

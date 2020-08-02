@@ -4,6 +4,7 @@
 module Util
   ( plus2
   , dropPrefix
+  , camelToSnake
   , zeroTime
   , mkTime
   ) where
@@ -15,8 +16,11 @@ import RIO.Time (fromGregorian, UTCTime(..))
 plus2 :: Int -> Int
 plus2 = (+ 2)
 
+camelToSnake :: String -> String
+camelToSnake = camelTo2 '_'
+
 dropPrefix :: String -> String -> String
-dropPrefix p = drop (length $ p <> "_") . camelTo2 '_'
+dropPrefix p = drop (length $ p <> "_") . camelToSnake
 
 zeroTime :: UTCTime
 zeroTime = UTCTime (fromGregorian 2020 7 7) 0

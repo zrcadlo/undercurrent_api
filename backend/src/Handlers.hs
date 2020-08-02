@@ -31,7 +31,9 @@ protected (Authenticated authUser) =
 protected _ = throwAll err401
 
 kindaProtected :: AuthResult AuthenticatedUser -> ServerT KindaProtected AppM
-kindaProtected authResult = searchDreams authResult
+kindaProtected authResult = 
+  (searchDreams authResult)
+    :<|> (dreamStats authResult)
 
 unprotected :: CookieSettings -> JWTSettings -> ServerT Unprotected AppM
 unprotected cs jwts = createUser cs jwts :<|> login cs jwts
@@ -254,6 +256,87 @@ searchDreams' userFilters location gender zodiacSign lucid nightmare recurring e
           }
   dreams <- runDB $ filteredDreams filters userFilters
   return $ map dreamWithKeys dreams
+
+-- TODO(luis) this endpoint is so painfully duplicative of searchDreams!!
+dreamStats ::
+  AuthResult AuthenticatedUser ->
+  Bool -> -- only mine?
+  Maybe Username ->
+  Maybe Text -> -- location
+  Maybe Gender ->
+  Maybe ZodiacSign ->
+  Maybe Bool -> -- lucid
+  Maybe Bool -> -- nightmare
+  Maybe Bool -> -- recurring
+  [EmotionLabel] ->
+  Maybe Text -> -- keywords
+  Maybe UTCTime ->
+  Maybe UTCTime ->
+  Maybe Int -> -- top N words and emotions?
+  AppM DreamStats
+
+dreamStats (Authenticated user) True _ loc g z l n r es k b a lt =
+  let currentUserId = toSqlKey $ userId $ auId user
+    in dreamStats' (privateDreamsFor currentUserId) loc g z l n r es k b a lt
+
+dreamStats _ True _ _ _ _ _ _ _ _ _ _ _ _ =
+  throwError $ err401 {errBody = "Need to be signed in to get your dreams' statistics!"}
+
+dreamStats _ _ Nothing loc g z l n r es k b a lt =
+  dreamStats' Nothing loc g z l n r es k b a lt
+
+dreamStats (Authenticated user) _ (Just username) loc g z l n r es k b a lt = do
+  requestedUser <- runDB $ getBy $ UniqueUsername username
+  let currentUserId = toSqlKey $ userId $ auId user
+  case requestedUser of
+    Nothing -> throwError $ err404 {errBody = "The requested user is not a known dreamer."}
+    Just (Entity requestedUserId _) ->
+      if (currentUserId == requestedUserId)
+        then dreamStats' (privateDreamsFor requestedUserId) loc g z l n r es k b a lt
+        else dreamStats' (publicDreamsFor requestedUserId) loc g z l n r es k b a lt
+
+dreamStats _ _ (Just username) loc g z l n r es k b a lt = do
+  requestedUser <- runDB $ getBy $ UniqueUsername username
+  case requestedUser of
+    Nothing -> throwError $ err404 {errBody = "The requested user is not a known dreamer."}
+    Just (Entity requestedUserId _) ->
+      dreamStats' (publicDreamsFor requestedUserId) loc g z l n r es k b a lt
+
+dreamStats' ::
+  OwnerFilters ->
+  Maybe Text -> -- location
+  Maybe Gender ->
+  Maybe ZodiacSign ->
+  Maybe Bool ->
+  Maybe Bool ->
+  Maybe Bool ->
+  [EmotionLabel] ->
+  Maybe Text -> -- keywords
+  Maybe UTCTime ->
+  Maybe UTCTime ->
+  Maybe Int -> -- top N words/emotions
+  AppM DreamStats
+dreamStats' userFilters location gender zodiacSign lucid nightmare recurring es keywords before after maybeN = do
+  let emotions = if null es then Nothing else Just es
+      topN = maybe 10 (\t -> if t > 100 then 100 else t) maybeN
+      filters =
+        DreamFilters
+          { filterLocation = location,
+            filterGender = gender,
+            filterZodiacSign = zodiacSign,
+            filterLucid = lucid,
+            filterNightmare = nightmare,
+            filterRecurring = recurring,
+            filterEmotions = emotions,
+            filterKeyword = keywords,
+            filterBefore = before,
+            filterAfter = after,
+            filterLimit = Nothing,
+            filterLastSeenId = Nothing
+          }      
+  topKeywords <- runDB $ keywordStats topN filters userFilters
+  topEmotions <- runDB $ emotionStats topN filters userFilters
+  return $ DreamStats (map KeywordStats topKeywords) (map EmotionStats topEmotions)
 
 -- | Handler helpers:
 sessionWithUser :: JWTSettings -> (Key UserAccount) -> AppM UserSession
