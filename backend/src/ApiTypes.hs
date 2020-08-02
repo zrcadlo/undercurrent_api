@@ -286,7 +286,7 @@ instance ToSample DreamWithUserInfo where
 newtype KeywordStats = KeywordStats {unKeywordStats :: KeywordStatsDB}
   deriving (Eq, Show, Generic)
 instance ToJSON KeywordStats where
-  toJSON = unKeywordStats >>> genericToJSON defaultOptions
+  toJSON = unKeywordStats >>> genericToJSON defaultOptions {fieldLabelModifier = camelToSnake}
 
 newtype EmotionStats = EmotionStats {unEmotionStats :: EmotionStatsDB}
   deriving (Eq, Show, Generic)
@@ -300,7 +300,8 @@ data DreamStats = DreamStats
   }
   deriving (Eq, Show, Generic)
 
-instance ToJSON DreamStats
+instance ToJSON DreamStats where
+  toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelToSnake}
 
 instance ToSample DreamStats where
   toSamples _ =

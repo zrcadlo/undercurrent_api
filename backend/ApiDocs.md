@@ -132,6 +132,89 @@ A JWT Token signed with this server's key
 {"token":"some-long-token","user":{"email":"nena@alpaca.com","location":"Tokyo, Japan","username":"nena.alpaca","zodiac_sign":"Scorpio","birthday":null,"gender":"Female"}}
 ```
 
+## GET /api/stats
+
+### Authentication
+
+This part of the API is protected by JSON Web Tokens ([JWTs](https://en.wikipedia.org/wiki/JSON_Web_Token))
+
+
+Clients must supply the following data
+A JWT Token signed with this server's key
+
+
+### GET Parameters:
+
+- mine
+     - **Description**: If specified, will only search the current user's dreams. Because this is a flag, you can call it like this: /api/dreams?mine
+     - This parameter is a **flag**. This means no value is expected to be associated to this parameter.
+
+- username
+     - **Values**: *nena.alpaca*
+     - **Description**: A username. Checks existence. If you provide your own, we'll search private dreams too. If none is provide, search all public dreams.
+
+- location
+     - **Values**: *Queens*
+     - **Description**: Filter by location (if not provided, won't affect the filtering.)
+
+- gender
+     - **Values**: *male, female, nonBinary*
+     - **Description**: Filter by dreamer's gender (if not provided, won't affect the filtering.)
+
+- zodiac_sign
+     - **Values**: *capricorn, sagittarius, ...*
+     - **Description**: Filter by dreamer's zodiac sign (if not provided, won't affect the filtering.)
+
+- lucid
+     - **Values**: *true, false*
+     - **Description**: Filter by: is lucid or not  (if not provided, won't affect the filtering.)
+
+- nightmare
+     - **Values**: *true, false*
+     - **Description**: Filter by: is nightmare or not (if not provided, won't affect the filtering.)
+
+- recurring
+     - **Values**: *true, false*
+     - **Description**: Filter by: is recurring or not (if not provided, won't affect the filtering.)
+
+- emotions
+     - **Values**: *joy*
+     - **Description**: Filter by emotions: requires a list, will return dreams that have all the given emotions (if not provided, won't affect the filtering.)
+     - This parameter is a **list**. All GET parameters with the name emotions[] will forward their values in a list to the handler.
+
+- keywords
+     - **Values**: *some cats are scary*
+     - **Description**: Filter by keyword, free text search. (if not provided, won't affect the filtering.)
+
+- before
+     - **Values**: *2017-02-14T00:00:00Z*
+     - **Description**: Filter by dreamed at date: will returns any dreams before the given date, inclusive. (if not provided, won't affect the filtering.)
+
+- after
+     - **Values**: *2017-02-14T00:00:00Z*
+     - **Description**: Filter by dreamed at date: will returns any dreams after the given date, inclusive. (if not provided, won't affect the filtering.)
+
+- top
+     - **Values**: *10, 100*
+     - **Description**: Get the top N keywords and emotions. Returns the top 10 if unspecified, max is 100.
+
+
+### Response:
+
+- Status code 200
+- Headers: []
+
+- Supported content types are:
+
+    - `application/json;charset=utf-8`
+    - `application/json`
+
+- Totals represent the sample taken, there could be more! (`application/json;charset=utf-8`, `application/json`):
+
+```javascript
+{"top_emotions":[{"recurring_count":0,"nightmare_count":0,"lucid_count":1,"total_dreams":1,"name":"sadness"}],"top_keywords":[{"recurring_count":0,"nightmare_count":0,"lucid_count":1,"total_dreams":1,"top_emotion":"sadness","keyword":"winter"}]}
+```
+
 ## GET /api/user
 
 ### Authentication
