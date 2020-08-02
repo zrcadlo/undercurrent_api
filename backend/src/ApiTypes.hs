@@ -169,13 +169,14 @@ data UpdatePassword = UpdatePassword
   }
   deriving (Show, Generic)
 
-instance FromJSON UpdatePassword
+instance FromJSON UpdatePassword where
+  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelToSnake}
+
 instance ToJSON UpdatePassword where
   toJSON _ =
-
     object
-      [ "currentPassword" .= ("sample" :: Text),
-        "newPassword" .= ("anotherPassword" :: Text)
+      [ "current_password" .= ("sample" :: Text),
+        "new_password" .= ("anotherPassword" :: Text)
       ]
 
 instance ToSample UpdatePassword where

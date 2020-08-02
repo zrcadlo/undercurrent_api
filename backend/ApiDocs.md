@@ -418,7 +418,7 @@ A JWT Token signed with this server's key
 - Example (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-{"newPassword":"anotherPassword","currentPassword":"sample"}
+{"new_password":"anotherPassword","current_password":"sample"}
 ```
 
 ### Response:

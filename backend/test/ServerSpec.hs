@@ -156,12 +156,12 @@ spec =
         describe "PUT /api/user/password" $ do
             it "responds with 403 if given the wrong password" $ do
                 authenticatedPut "/api/user/password" currentUserToken
-                    [json|{currentPassword: "notTheRightOne", newPassword: "aNewOne"}|]
+                    [json|{current_password: "notTheRightOne", new_password: "aNewOne"}|]
                     `shouldRespondWith` 403
             
             it "responds with 204 if given the right password" $ do
                 authenticatedPut "/api/user/password" currentUserToken
-                    [json|{currentPassword: "secureAlpacaPassword", newPassword: "aNewPassword"}|]
+                    [json|{current_password: "secureAlpacaPassword", new_password: "aNewPassword"}|]
                     `shouldRespondWith` 204
 
         describe "POST /api/users" $ do
