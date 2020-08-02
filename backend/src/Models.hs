@@ -234,10 +234,7 @@ sampleDreamIds sampleSize dreamFilters userConditions = do
         restrictByOwnerConditions dream userConditions
         restrictByDreamFilters dream userAccount dreamFilters
         E.orderBy [E.rand]
-        -- 1000 is statistically significant up to perhaps 10,000,000 rows,
-        -- with a margin of error of 3% and confidence of 95%
-        -- according to cursory research with tools like:
-        -- https://www.surveymonkey.com/mp/sample-size-calculator/
+
         E.limit sampleSize 
         return (dream E.^. DreamId)
 
@@ -331,12 +328,20 @@ data EmotionStatsDB = EmotionStatsDB {
     eTotalDreams :: Int
 } deriving (Eq, Show)
 
-keywordStats :: Range -> Int -> QueryM [KeywordStatsDB]
-keywordStats range n = do
-    topWords <- commonWordStats range n
+statsSampleSize :: Int64
+statsSampleSize = 1000
+
+keywordStats :: Int -> DreamFilters -> OwnerFilters -> QueryM [KeywordStatsDB]
+keywordStats n dreamFilters ownerFilters = do
+    -- 1000 is statistically significant up to perhaps 10,000,000 rows,
+    -- with a margin of error of 3% and confidence of 95%
+    -- according to cursory research with tools like:
+    -- https://www.surveymonkey.com/mp/sample-size-calculator/
+    sampleIds <- sampleDreamIds statsSampleSize dreamFilters ownerFilters
+    topWords <- commonWordStats n sampleIds
     withEmotions <- 
         forM topWords $ \((w, l, ni, r, t)) -> do
-            perhapsEmotion <- topEmotionForKeyword range w
+            perhapsEmotion <- topEmotionForKeyword w sampleIds
             if (not $ null perhapsEmotion) then
                 pure $ Just $ (w,l,ni,r,t,(perhapsEmotion & head & fst))
             else
@@ -344,9 +349,9 @@ keywordStats range n = do
     return $ map (\(w,l,ni,r,t,te)-> KeywordStatsDB w l ni r t (EmotionLabel te)) 
                  (catMaybes withEmotions)
 
-emotionStats :: Range -> Int -> QueryM [EmotionStatsDB]
-emotionStats range n =
-    (mostCommonEmotions range n) >>= mapM mkEmotionStats
+emotionStats :: Int -> DreamFilters -> OwnerFilters -> QueryM [EmotionStatsDB]
+emotionStats n dreamFilters ownerFilters =
+    sampleDreamIds statsSampleSize dreamFilters ownerFilters >>= (mostCommonEmotions n) >>= mapM mkEmotionStats
     where
         mkEmotionStats (e, l, ni, r, t) = pure $ EmotionStatsDB (EmotionLabel e) l ni r t
 
@@ -358,14 +363,11 @@ TYPE SAFETY IS FRAGILE HERE
 TREAD LIGHTLY!
 -}
 
--- | Get tuples of word => occurences, up to N most common words
--- see notes and test scripts in https://gist.github.com/lfborjas/2fd2d237d5600b392231ae2c472017bb
--- for easy REPL testing, with `stack ghci`, e.g.
--- *> w <- runDBSimple "postgresql://localhost/undercurrent_dev?user=luis" $ mostCommonWords 3
--- yields
--- [("recurring",1728),("prophecy",1728),("smol",1728)]
-commonWordStats :: Range -> Int -> QueryM [(Text, Int, Int, Int, Int)]
-commonWordStats (Range start end) n = [sqlQQ|
+nonEmptyIdList :: [E.Value (Key Dream)] -> NonEmpty (Key Dream)
+nonEmptyIdList ids = E.toSqlKey 0 :| map E.unValue ids
+
+commonWordStats :: Int -> [E.Value (Key Dream)]  -> QueryM [(Text, Int, Int, Int, Int)]
+commonWordStats n sampleIds = [sqlQQ|
     select c.word, 
     count (dream.id) filter (where is_lucid = true) as are_lucid,
         count (dream.id) filter (where is_nightmare = true) as are_nightmare,
@@ -373,15 +375,16 @@ commonWordStats (Range start end) n = [sqlQQ|
         count (*) as total_dreams 
     from dream join
         (select word, ndoc from ts_stat($$select to_tsvector('english_simple', title || ' ' || description) from dream
-        where dreamed_at between #{start} and #{end}$$)
+        where id in %{ids}$$)
         order by ndoc desc limit #{n}) as c
         on to_tsvector ('english_simple', title || ' ' || description) @@ to_tsquery('english_simple', c.word)
-    where dreamed_at between #{start} and #{end}
+    where id in %{ids}
     group by c.word
     order by total_dreams desc
     limit #{n};
 |] & (fmap . map) asStats
     where
+        ids = nonEmptyIdList sampleIds
         asStats ((Single word), 
                 (Single lucid), 
                 (Single nightmare), 
@@ -389,29 +392,33 @@ commonWordStats (Range start end) n = [sqlQQ|
                 (Single total)) =
                     (word, lucid, nightmare, recurring, total)
 
-topEmotionForKeyword :: Range -> Text -> QueryM [(Text, Int)]
-topEmotionForKeyword (Range start end) w = [sqlQQ|
+topEmotionForKeyword :: Text -> [E.Value (Key Dream)] -> QueryM [(Text, Int)]
+topEmotionForKeyword w sampleIds = [sqlQQ|
     select emotion #>> '{}', count (*) as c from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
     where to_tsvector ('english_simple', title || ' ' || description) @@ to_tsquery ('english_simple', #{w})
-    and dreamed_at between #{start} and #{end}
+    and id in %{ids}
     group by emotion order by c desc limit 1
 |] & (fmap . map) (\(word, count) -> (unSingle word :: Text, unSingle count :: Int))
+    where
+        ids = nonEmptyIdList sampleIds
 
 -- `emotion` is returned as a json value, and as such, it's quoted in the DB.
 -- the `#>>` operator will extract it as actual text:
 -- https://www.postgresql.org/docs/current/functions-json.html#FUNCTIONS-JSON-OP-TABLE
-mostCommonEmotions :: Range -> Int -> QueryM [(Text, Int, Int, Int, Int)]
-mostCommonEmotions (Range start end) n = [sqlQQ|
+mostCommonEmotions :: Int -> [E.Value (Key Dream)] -> QueryM [(Text, Int, Int, Int, Int)]
+mostCommonEmotions n sampleIds = [sqlQQ|
     select emotion #>> '{}', 
         count (dream.id) filter (where is_lucid = true) as are_lucid,
         count (dream.id) filter (where is_nightmare = true) as are_nightmare,
         count (dream.id) filter (where is_recurring = true) as are_recurring,
         count (*) as total_dreams
     from dream cross join lateral jsonb_array_elements (emotions::jsonb) as emotion
-    where dreamed_at between #{start} and #{end}
+    where id in %{ids}
     group by emotion order by total_dreams desc limit #{n}
 |] & (fmap . map) (\(a,b,c,d,e) -> 
     (unSingle a :: Text, unSingle b :: Int, unSingle c :: Int, unSingle d :: Int, unSingle e :: Int))
+        where
+            ids = nonEmptyIdList sampleIds
 
 {-
 Some more notes at:

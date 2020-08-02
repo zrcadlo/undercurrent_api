@@ -158,7 +158,7 @@ spec = do
                     insert_ $ aDream t t e d Nothing
 
                 let expectedStats = KeywordStatsDB "winter" 0 0 0 1 "sadness"
-                winterStats <- keywordStats (Range (mkTime 2019 12 1) (mkTime 2020 6 1)) 10
+                winterStats <- keywordStats 10 ((flip filterDate) (Just $ mkTime 2019 12 1) (Just $ mkTime 2020 6 1)) Nothing
                 liftIO $ winterStats `shouldBe` [expectedStats]
 
     describe "emotionStats" $ do
@@ -170,7 +170,7 @@ spec = do
                     insert_ $ aDream t t e d Nothing
 
                 let expectedStats = EmotionStatsDB (EmotionLabel "sadness") 0 0 0 1
-                winterStats <- emotionStats (Range (mkTime 2019 12 1) (mkTime 2020 6 1)) 10
+                winterStats <- emotionStats 10 ((flip filterDate) (Just $ mkTime 2019 12 1) (Just $ mkTime 2020 6 1)) Nothing
                 liftIO $ winterStats `shouldBe` [expectedStats]
 
 
