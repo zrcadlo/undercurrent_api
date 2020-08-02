@@ -328,15 +328,15 @@ data EmotionStatsDB = EmotionStatsDB {
     eTotalDreams :: Int
 } deriving (Eq, Show)
 
+-- 1000 is statistically significant up to perhaps 10,000,000 rows,
+-- with a margin of error of 3% and confidence of 95%
+-- according to cursory research with tools like:
+-- https://www.surveymonkey.com/mp/sample-size-calculator/
 statsSampleSize :: Int64
 statsSampleSize = 1000
 
 keywordStats :: Int -> DreamFilters -> OwnerFilters -> QueryM [KeywordStatsDB]
 keywordStats n dreamFilters ownerFilters = do
-    -- 1000 is statistically significant up to perhaps 10,000,000 rows,
-    -- with a margin of error of 3% and confidence of 95%
-    -- according to cursory research with tools like:
-    -- https://www.surveymonkey.com/mp/sample-size-calculator/
     sampleIds <- sampleDreamIds statsSampleSize dreamFilters ownerFilters
     topWords <- commonWordStats n sampleIds
     withEmotions <- 
