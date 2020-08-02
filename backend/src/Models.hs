@@ -44,7 +44,7 @@ import Util (zeroTime)
 import Database.Persist.Sql.Raw.QQ (sqlQQ)
 import Database.Persist.Sql (Single(..))
 import Database.Persist.Postgresql (runSqlConn)
-import Control.Monad.Logger (NoLoggingT(runNoLoggingT))
+import Control.Monad.Logger (LoggingT, runStdoutLoggingT, NoLoggingT(runNoLoggingT))
 
 type DBM m a = (MonadIO m) => ReaderT SqlBackend m a
 type QueryM a = forall m. DBM m a
@@ -105,12 +105,12 @@ runDB query = do
     liftIO $ runSqlPool query pool
 
 runDBSimple
-    :: (MonadIO m, MonadUnliftIO m)
+    :: (MonadUnliftIO m)
     => ConnectionString
-    -> ReaderT SqlBackend (NoLoggingT m) b
+    -> ReaderT SqlBackend (LoggingT m) b
     -> m b
 runDBSimple conStr query = 
-    runNoLoggingT $ withPostgresqlConn conStr $ runSqlConn query
+    runStdoutLoggingT $ withPostgresqlConn conStr $ runSqlConn query
 
 
 -- | Default dictionary for all text searches. We currently support English only,
