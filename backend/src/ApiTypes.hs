@@ -64,6 +64,28 @@ type KindaProtected =
     QueryParam "limit" Int64
     :> QueryParam "last_seen_id" (Key Dream)
     :> Get '[JSON] [DreamWithUserInfo]
+  :<|> "api" :> "stats"
+    :>
+    QueryFlag "mine"
+    :> QueryParam "username" Username
+    :> QueryParam "location" Text
+    :> QueryParam "gender" Gender
+    :> QueryParam "zodiac_sign" ZodiacSign
+    :>
+    -- dream filters
+    QueryParam "lucid" Bool
+    :> QueryParam "nightmare" Bool
+    :> QueryParam "recurring" Bool
+    :> QueryParams "emotions" EmotionLabel
+    :> QueryParam "keywords" Text
+    :>
+    -- date ranges
+    QueryParam "before" UTCTime
+    :> QueryParam "after" UTCTime
+    :>
+    -- top words and emotions
+    QueryParam "top" Int
+    :> Get '[JSON] DreamStats
 
 type Static =
   "docs" :> Raw
@@ -261,6 +283,36 @@ instance ToSample DreamWithUserInfo where
           (Just Female)
           (Just Scorpio)
 
+newtype KeywordStats = KeywordStats {unKeywordStats :: KeywordStatsDB}
+  deriving (Eq, Show, Generic)
+instance ToJSON KeywordStats where
+  toJSON = unKeywordStats >>> genericToJSON defaultOptions
+
+newtype EmotionStats = EmotionStats {unEmotionStats :: EmotionStatsDB}
+  deriving (Eq, Show, Generic)
+instance ToJSON EmotionStats where
+  toJSON = unEmotionStats >>> genericToJSON defaultOptions {fieldLabelModifier = dropPrefix "emotion"}
+
+data DreamStats = DreamStats
+  {
+    topKeywords :: [KeywordStats]
+  , topEmotions :: [EmotionStats]
+  }
+  deriving (Eq, Show, Generic)
+
+instance ToJSON DreamStats
+
+instance ToSample DreamStats where
+  toSamples _ =
+    [("Totals represent the sample taken, there could be more!", sampleStats)]
+    where
+      sampleStats =
+        DreamStats {
+          topKeywords = [KeywordStats $ KeywordStatsDB "winter" 1 0 0 1 "sadness"]
+        , topEmotions = [EmotionStats $ EmotionStatsDB (EmotionLabel "sadness") 1 0 0 1]
+        }
+
+
 data DreamUpdate = DreamUpdate
   { updateTitle :: Maybe Text,
     updateDate :: Maybe UTCTime,
@@ -414,3 +466,8 @@ instance ToParam (QueryParam "username" Username) where
 instance ToParam (QueryFlag "mine") where
   toParam _ =
     DocQueryParam "mine" [] ("If specified, will only search the current user's dreams. Because this is a flag, you can call it like this: /api/dreams?mine") Flag
+
+
+instance ToParam (QueryParam "top" Int) where
+  toParam _ =
+    DocQueryParam "top" ["10", "100"] ("Get the top N keywords and emotions. Returns the top 10 if unspecified, max is 100.") Normal

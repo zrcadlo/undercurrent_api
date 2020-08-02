@@ -234,7 +234,6 @@ sampleDreamIds sampleSize dreamFilters userConditions = do
         restrictByOwnerConditions dream userConditions
         restrictByDreamFilters dream userAccount dreamFilters
         E.orderBy [E.rand]
-
         E.limit sampleSize 
         return (dream E.^. DreamId)
 
@@ -318,15 +317,15 @@ data KeywordStatsDB = KeywordStatsDB {
     recurringCount :: Int,
     totalDreams :: Int,
     topEmotion :: EmotionLabel
-} deriving (Eq, Show)
+} deriving (Eq, Show, Generic)
 
 data EmotionStatsDB = EmotionStatsDB {
     emotionName :: EmotionLabel,
-    eLucidCount :: Int,
-    eNightmareCount :: Int,
-    eRecurringCount :: Int,
-    eTotalDreams :: Int
-} deriving (Eq, Show)
+    emotionLucidCount :: Int,
+    emotionNightmareCount :: Int,
+    emotionRecurringCount :: Int,
+    emotionTotalDreams :: Int
+} deriving (Eq, Show, Generic)
 
 -- 1000 is statistically significant up to perhaps 10,000,000 rows,
 -- with a margin of error of 3% and confidence of 95%
