@@ -56,6 +56,7 @@ mkDream userId t d es at Nothing =
         at
         zeroTime
         zeroTime
+        Nothing -- TODO: actually take location?
 
 mkDream userId t d es at (Just (lucid, nightmare, recurring, private, starred)) =
     Dream
@@ -71,6 +72,7 @@ mkDream userId t d es at (Just (lucid, nightmare, recurring, private, starred)) 
         at
         zeroTime
         zeroTime
+        Nothing
 
 dreamTitlesFor :: [(Entity Dream, Entity UserAccount)] -> [Text]
 dreamTitlesFor = map (\(Entity _ d, _) -> dreamTitle d)

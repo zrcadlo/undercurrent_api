@@ -38,7 +38,7 @@ import qualified Database.Esqueleto.PostgreSQL.JSON as E
 -- uncomment for special operators like arrayAgg
 --import qualified Database.Esqueleto.PostgreSQL as E
 import           Database.Esqueleto.PostgreSQL.JSON
-                                                ( JSONB )
+                                                (JSONB,  JSONB )
 import Database.Esqueleto.Internal.Sql (unsafeSqlValue, unsafeSqlBinOp, unsafeSqlFunction)
 import Util (zeroTime)
 import Database.Persist.Sql.Raw.QQ (sqlQQ)
@@ -57,7 +57,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
         username Username
         gender Gender Maybe
         birthday UTCTime Maybe
-        location Text Maybe
+        location (JSONB Location) Maybe
         zodiacSign ZodiacSign Maybe
         createdAt UTCTime default=now()
         updatedAt UTCTime default=now()
@@ -78,6 +78,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
         dreamedAt UTCTime default=now()
         createdAt UTCTime default=now()
         updatedAt UTCTime default=now()
+        location  (JSONB Location) Maybe
         deriving Eq Show
 |]
 
@@ -285,7 +286,7 @@ restrictByDreamFilters dream userAccount DreamFilters{..} = do
         )
         filterKeyword
     -- User Account filters
-    maybeNoConditions (\b -> E.where_ (userAccount E.^. UserAccountLocation E.==. (E.just $ E.val b))) filterLocation
+    --maybeNoConditions (\b -> E.where_ (userAccount E.^. UserAccountLocation E.==. (E.just $ E.val b))) filterLocation
     maybeNoConditions (\g -> E.where_ (userAccount E.^. UserAccountGender E.==. (E.just $ E.val g))) filterGender
     maybeNoConditions (\z -> E.where_ (userAccount E.^. UserAccountZodiacSign E.==. (E.just $ E.val z))) filterZodiacSign
     -- Ranges
@@ -299,7 +300,7 @@ sampleUser = UserAccount "nena@alpaca.com"
                          "nena.alpaca"
                          (Just Female)
                          Nothing
-                         (Just "Tokyo, Japan")
+                         (Just $ E.JSONB $ Location {city = Just "Tokyo", country = Just "Japan", region = Nothing, latitude = Nothing, longitude = Nothing})
                          (Just Scorpio)
                          zeroTime
                          zeroTime

@@ -132,6 +132,17 @@ mkEmotionLabel s =
   else
     Nothing
 
+data Location = Location {
+  city :: Maybe Text
+, region :: Maybe Text
+, country :: Maybe Text
+, latitude :: Maybe Double
+, longitude :: Maybe Double
+} deriving  (Show, Eq, Generic)
+
+instance ToJSON Location
+instance FromJSON Location
+
 newtype Username = Username (CI Text)
   deriving (Show, Eq, Generic, PersistField, PersistFieldSql, IsString)
 

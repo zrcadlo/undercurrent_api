@@ -26,6 +26,7 @@ import RIO.Time (fromGregorian, UTCTime(..))
 import Util
 import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
 import Helpers
+import qualified Database.Esqueleto.PostgreSQL.JSON as E
 
 noOpLog :: LogFunc
 noOpLog = mkLogFunc $ (\_ _ _ _ -> pure ())
@@ -51,6 +52,9 @@ testApp = do
         in 
             return $ app cfg cookieCfg jwtCfg ctx
 
+mkLocation :: Text  -> Text -> (Maybe (E.JSONB Location))
+mkLocation c co = Just $ E.JSONB $ Location {city = Just c, region = Nothing, country = Just co, latitude = Nothing, longitude = Nothing}
+
 setupData :: IO ()
 setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
     dropModels
@@ -63,7 +67,7 @@ setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
             "Nena Alpaca"
             (Just Female)
             (Just (UTCTime (fromGregorian 2017 2 14) 0))
-            (Just "Tokyo, Japan")
+            (mkLocation "Tokyo" "Japan")
             (Just Scorpio)
             zeroTime
             zeroTime
@@ -74,7 +78,7 @@ setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
                 "Charlie Alpaca"
                 (Just Male)
                 (Just zeroTime)
-                (Just "Queens")
+                (mkLocation "Queens" "US")
                 (Just Cancer)
                 zeroTime
                 zeroTime
@@ -85,23 +89,24 @@ setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
                 "Paco Alpaca"
                 (Just NonBinary)
                 (Just zeroTime)
-                (Just "Tokyo, Japan")
+                (mkLocation "Tokyo" "Japan")
                 (Just Capricorn)
                 zeroTime
                 zeroTime
 
     _ <- insertMany $ 
-        [(Dream nena "Nena's dream" "Nena dreams" False False True False False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
-        ,(Dream nena "Nena's secret dream" "Nena dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
+        -- TODO: actually situate in some location!
+        [(Dream nena "Nena's dream" "Nena dreams" False False True False False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime Nothing)
+        ,(Dream nena "Nena's secret dream" "Nena dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime Nothing)
         ]
 
     _ <- insertMany $
-        [(Dream charlie "Charlies's dream" "Charlie dreams" False False True False False (JSONB [EmotionLabel "joy", EmotionLabel "surprise"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
-        ,(Dream charlie "Charlie's secret dream" "Charlie dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
+        [(Dream charlie "Charlies's dream" "Charlie dreams" False False True False False (JSONB [EmotionLabel "joy", EmotionLabel "surprise"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime Nothing)
+        ,(Dream charlie "Charlie's secret dream" "Charlie dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime Nothing)
         ]
 
     _ <- insertMany $
-        [(Dream paco "Paco's secret dream" "Paco dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)]
+        [(Dream paco "Paco's secret dream" "Paco dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime Nothing)]
 
     return ()
 

@@ -59,7 +59,7 @@ updateUser (AuthenticatedUser auId) UpdateUserAccount {..} = do
                 maybe Nothing (Just . (UserAccountEmail =.)) updateEmail,
                 maybe Nothing (Just . (\x -> UserAccountGender =. Just x)) updateGender,
                 maybe Nothing (Just . (\x -> UserAccountBirthday =. Just x)) updateBirthday,
-                maybe Nothing (Just . (\x -> UserAccountLocation =. Just x)) updateLocation,
+                --maybe Nothing (Just . (\x -> UserAccountLocation =. Just x)) updateLocation,
                 maybe Nothing (Just . (\x -> UserAccountZodiacSign =. Just x)) updateZodiacSign
               ]
        in runDB $ update (toSqlKey $ userId auId) updates
@@ -95,6 +95,7 @@ createDream (AuthenticatedUser auId) NewDream {..} = do
           date
           zeroTime
           zeroTime
+          Nothing -- TODO: actually parse location, default to the user's
 
   me <- runDB $ getEntity userKey
   case me of
@@ -139,7 +140,7 @@ createUser _ jwts NewUserAccount {..} = do
           username
           gender
           birthday
-          location
+          Nothing -- TODO: actually parse location
           zodiacSign
           zeroTime -- createdAt is set by a database trigger, so we use a bogus timestamp.
           zeroTime -- updatedAt is also set by a db trigger.
@@ -380,7 +381,7 @@ dreamWithKeys (Entity dreamId Dream {..}, Entity _ UserAccount {..}) =
       dkStarred = dreamIsStarred,
       dkDreamId = dreamId,
       dkDreamerUsername = userAccountUsername,
-      dkDreamerLocation = userAccountLocation,
+      dkDreamerLocation = Nothing, -- TODO: actually parse location
       dkDreamerGender = userAccountGender,
       dkDreamerZodiacSign = userAccountZodiacSign
     }
