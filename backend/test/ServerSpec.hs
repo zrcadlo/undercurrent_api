@@ -52,8 +52,8 @@ testApp = do
         in 
             return $ app cfg cookieCfg jwtCfg ctx
 
-mkLocation :: Text  -> Text -> (Maybe (E.JSONB Location))
-mkLocation c co = Just $ E.JSONB $ Location {city = Just c, region = Nothing, country = Just co, latitude = Nothing, longitude = Nothing}
+mkJSONLocation :: Text  -> Text -> (Maybe (E.JSONB Location))
+mkJSONLocation c co = Just $ E.JSONB $ Location {city = Just c, region = Nothing, country = Just co, latitude = Nothing, longitude = Nothing}
 
 setupData :: IO ()
 setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
@@ -67,7 +67,7 @@ setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
             "Nena Alpaca"
             (Just Female)
             (Just (UTCTime (fromGregorian 2017 2 14) 0))
-            (mkLocation "Tokyo" "Japan")
+            (mkJSONLocation "Tokyo" "Japan")
             (Just Scorpio)
             zeroTime
             zeroTime
@@ -78,7 +78,7 @@ setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
                 "Charlie Alpaca"
                 (Just Male)
                 (Just zeroTime)
-                (mkLocation "Queens" "US")
+                (mkJSONLocation "Queens" "US")
                 (Just Cancer)
                 zeroTime
                 zeroTime
@@ -89,7 +89,7 @@ setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
                 "Paco Alpaca"
                 (Just NonBinary)
                 (Just zeroTime)
-                (mkLocation "Tokyo" "Japan")
+                (mkJSONLocation "Tokyo" "Japan")
                 (Just Capricorn)
                 zeroTime
                 zeroTime
@@ -148,14 +148,14 @@ spec =
                         username: "Nena Alpaca",
                         gender: "Female",
                         birthday: "2017-02-14T00:00:00Z",
-                        location: "Tokyo, Japan",
+                        location: {city: "Tokyo", country: "Japan", region: null, latitude: null, longitude: null},
                         zodiac_sign: "Scorpio"
                     }|] {matchStatus = 200}
 
         describe "PUT /api/user" $ do
             it "responds successfully when updating email and name" $ do
                 authenticatedPut "/api/user" currentUserToken
-                    [json|{username: "Another Nena", location: "Shenzhen, China", zodiac_sign: "Cancer"}|]
+                    [json|{username: "Another Nena", location: {name: "Shenzhen", country: "China", type: "city"}, zodiac_sign: "Cancer"}|]
                     `shouldRespondWith` 204
 
         describe "PUT /api/user/password" $ do
@@ -182,7 +182,7 @@ spec =
                         "gender":"Male",
                         "username":"Paco Alpaco",
                         "password":"somePassword",
-                        "birthplace":"Shenzhen, China"
+                        "location": {name: "Shenzhen", country: "China", type: "city"}
                     }|]
                     `shouldRespondWith` 409
 
@@ -194,7 +194,7 @@ spec =
                         "gender":"Male",
                         "username":"Paco Alpaco",
                         "password":"somePassword",
-                        "birthplace":"Shenzhen, China"
+                        "location": {name: "Shenzhen", country: "China", type: "city"}
                     }|]
                     `shouldRespondWith` 409                    
 
@@ -206,7 +206,7 @@ spec =
                         "gender":"Male",
                         "username":"CHARLIE ALPACA",
                         "password":"somePassword",
-                        "birthplace":"Shenzhen, China"
+                        "location": {name: "Shenzhen", country: "China", type: "city"}
                     }|]
                     `shouldRespondWith` 409                    
             
@@ -218,7 +218,7 @@ spec =
                         "gender":"Male",
                         "username":"Paco Alpaco",
                         "password":"somePassword",
-                        "birthplace":"Shenzhen, China"
+                        "location": {name: "Shenzhen", country: "China", type: "city"}
                     }|]
                     `shouldRespondWith` 201
 

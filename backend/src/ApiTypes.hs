@@ -105,12 +105,13 @@ type AppM = ReaderT App Servant.Handler
 -- into our own Location at the edge. Right now, this type represents a response from
 -- Algolia's Places API:
 -- https://community.algolia.com/places/documentation.html#suggestions
-data APILatLng = ApiLatLng {
+data APILatLng = APILatLng {
   lat :: Double
 , lng :: Double
 } deriving (Show, Eq, Generic)
 
 instance FromJSON APILatLng
+instance ToJSON APILatLng
 
 data APILocation = APILocation
   {
@@ -123,6 +124,21 @@ data APILocation = APILocation
   , algoliaLatlng :: Maybe APILatLng
   } deriving (Show, Eq, Generic)
 
+sampleApiLocation ::APILocation
+sampleApiLocation = 
+  APILocation {
+    algoliaType = Just "city",
+    algoliaName = Just "Manhattan",
+    algoliaCity = Nothing,
+    algoliaCountry = Just "USA",
+    algoliaCountryCode = Just "us",
+    algoliaAdministrative = Just "New York",
+    algoliaLatlng = Just $ APILatLng 1.0 0.1
+  }
+
+instance ToJSON APILocation where
+  toJSON = genericToJSON defaultOptions {fieldLabelModifier = dropPrefix "algolia" }
+
 instance FromJSON APILocation where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = dropPrefix "algolia"}
 
@@ -131,7 +147,7 @@ data NewUserAccount = NewUserAccount
     email :: Email,
     gender :: Maybe Gender,
     birthday :: Maybe UTCTime,
-    location :: Maybe Text,
+    location :: Maybe APILocation,
     zodiacSign :: Maybe ZodiacSign,
     password :: Password
   }
@@ -159,7 +175,7 @@ instance ToSample NewUserAccount where
         "paco@alpaca.net"
         (Just Male)
         (Just (UTCTime (fromGregorian 2017 2 14) 0))
-        (Just "Shenzhen, China")
+        (Just sampleApiLocation)
         (Just Capricorn)
         "secureAlpacaPassword"
 
@@ -168,7 +184,7 @@ data UpdateUserAccount = UpdateUserAccount
     updateEmail :: Maybe Email,
     updateGender :: Maybe Gender,
     updateBirthday :: Maybe UTCTime,
-    updateLocation :: Maybe Text,
+    updateLocation :: Maybe APILocation,
     updateZodiacSign :: Maybe ZodiacSign
   }
   deriving (Show, Generic)

@@ -143,6 +143,10 @@ data Location = Location {
 instance ToJSON Location
 instance FromJSON Location
 
+mkLocation :: Maybe Text -> Maybe Text -> Maybe Text -> Location
+mkLocation newCity newRegion newCountry = 
+  Location newCity newRegion newCountry Nothing Nothing
+
 newtype Username = Username (CI Text)
   deriving (Show, Eq, Generic, PersistField, PersistFieldSql, IsString)
 

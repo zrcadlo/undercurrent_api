@@ -53,13 +53,14 @@ updateUser (AuthenticatedUser auId) UpdateUserAccount {..} = do
   case maybeUser of
     Nothing -> throwError $ err404 {errBody = "User not found."}
     Just _ -> do
-      let updates =
+      let parsedLocation = parseLocation <$> updateLocation
+          updates =
             catMaybes $
               [ maybe Nothing (Just . (UserAccountUsername =.)) updateUsername,
                 maybe Nothing (Just . (UserAccountEmail =.)) updateEmail,
                 maybe Nothing (Just . (\x -> UserAccountGender =. Just x)) updateGender,
                 maybe Nothing (Just . (\x -> UserAccountBirthday =. Just x)) updateBirthday,
-                --maybe Nothing (Just . (\x -> UserAccountLocation =. Just x)) updateLocation,
+                maybe Nothing (Just . (\x -> UserAccountLocation =. (Just . JSONB) x)) parsedLocation,
                 maybe Nothing (Just . (\x -> UserAccountZodiacSign =. Just x)) updateZodiacSign
               ]
        in runDB $ update (toSqlKey $ userId auId) updates
@@ -133,14 +134,15 @@ deleteDream (AuthenticatedUser auId) dreamId = do
 createUser :: CookieSettings -> JWTSettings -> NewUserAccount -> AppM UserSession
 createUser _ jwts NewUserAccount {..} = do
   hashedPw <- hashPassword password
-  let newUser =
+  let userLocation = parseLocation <$> location
+      newUser =
         UserAccount
           email
           hashedPw
           username
           gender
           birthday
-          Nothing -- TODO: actually parse location
+          (maybe Nothing (Just . JSONB) userLocation)
           zodiacSign
           zeroTime -- createdAt is set by a database trigger, so we use a bogus timestamp.
           zeroTime -- updatedAt is also set by a db trigger.
