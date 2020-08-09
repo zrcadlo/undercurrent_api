@@ -423,7 +423,7 @@ spec =
             context "all recent dreams" $ do
                 it "finds the most recent dreams" $ do
                     let recentDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":null,"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"},{"nightmare":true,"lucid":false,"dreamer_location":null,"private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"},{"nightmare":true,"lucid":false,"dreamer_location":null,"private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
                     ]|]
                     get "/api/dreams?limit=2"
                         `shouldRespondWith` recentDreams {matchStatus = 200}
@@ -431,7 +431,7 @@ spec =
             context "with user filters" $ do
                 it "finds public dreams that match the user filters" $ do
                     let pacoDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":null,"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
                     -- TODO: add location filter test
                     get "/api/dreams?gender=nonBinary"
@@ -452,32 +452,32 @@ spec =
             context "with complex dream filters" $ do
                 it "finds dreams with the given emotions" $ do
                     let sadPacoDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":null,"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
                     get "/api/dreams?emotions[]=intimidated&emotions[]=joy"
                         `shouldRespondWith` sadPacoDreams {matchStatus = 200}
                 it "finds dreams with the given keywords" $ do
                     let weirdPacoDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":null,"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
                     get "/api/dreams?keywords=Alpaca%20SUNGLASS"
                         `shouldRespondWith` weirdPacoDreams {matchStatus = 200}
             context "with date ranges" $ do
                 it "finds dreams after a given date" $ do
                     let someDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":null,"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
                     get "/api/dreams?after=2020-07-07T00:00:00Z"
                         `shouldRespondWith` someDreams {matchStatus = 200}
                 it "finds dreams before a given date" $ do
                     let someMoreDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":null,"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"},{"nightmare":true,"lucid":false,"dreamer_location":null,"private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"},{"nightmare":true,"lucid":false,"dreamer_location":null,"private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
                     ]|]
                     get "/api/dreams?before=2020-07-07T00:00:00Z&limit=2"
                         `shouldRespondWith` someMoreDreams {matchStatus=200}
                 it "finds dreams in a given range" $ do
                     let thoseSameDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":null,"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
                     get "/api/dreams?before=2020-08-01T00:00:00Z&after=2020-07-07T00:00:00Z"
                         `shouldRespondWith` thoseSameDreams {matchStatus=200}

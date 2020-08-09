@@ -97,13 +97,18 @@ createDream (AuthenticatedUser auId) NewDream {..} = do
           date
           zeroTime
           zeroTime
-          (maybe Nothing (Just . JSONB) parsedLocation)
+          
 
   me <- runDB $ getEntity userKey
   case me of
     Nothing -> throwError $ err404 {errBody = "Seems like I lost myself in my dreams!"}
-    Just userEntity -> do
-      dreamEntity <- runDB $ insertEntity dbDream
+    Just userEntity@(Entity _ user) -> do
+      -- if no location is provided, default to the user account's current location.
+      let actualLocation = maybe (userAccountLocation user)
+                                 (\l -> (Just . JSONB) l)
+                                 parsedLocation
+                                
+      dreamEntity <- runDB $ insertEntity (dbDream actualLocation)
       return $ dreamWithKeys (dreamEntity, userEntity)
 
 updateDream :: AuthenticatedUser -> Int64 -> DreamUpdate -> AppM NoContent
