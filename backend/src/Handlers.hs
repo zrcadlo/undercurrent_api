@@ -82,6 +82,7 @@ updatePassword (AuthenticatedUser auId) UpdatePassword {..} = do
 createDream :: AuthenticatedUser -> NewDream -> AppM DreamWithUserInfo
 createDream (AuthenticatedUser auId) NewDream {..} = do
   let userKey = toSqlKey $ userId auId :: Key UserAccount
+      parsedLocation = parseLocation <$> dreamerLocation
       dbDream =
         Dream
           userKey
@@ -96,7 +97,7 @@ createDream (AuthenticatedUser auId) NewDream {..} = do
           date
           zeroTime
           zeroTime
-          Nothing -- TODO: actually parse location, default to the user's
+          (maybe Nothing (Just . JSONB) parsedLocation)
 
   me <- runDB $ getEntity userKey
   case me of
@@ -355,7 +356,8 @@ sessionWithUser jwts sessionUserId = do
 
 updateDreamH :: (MonadReader s m, HasDBConnectionPool s, MonadIO m) => Key Dream -> DreamUpdate -> m ()
 updateDreamH dreamKey DreamUpdate {..} =
-  let updates =
+  let parsedLocation = parseLocation <$> updateDreamerLocation
+      updates =
         catMaybes $
           [ maybe Nothing (Just . (DreamTitle =.)) updateTitle,
             maybe Nothing (Just . (DreamDreamedAt =.)) updateDate,
@@ -365,7 +367,8 @@ updateDreamH dreamKey DreamUpdate {..} =
             maybe Nothing (Just . (DreamIsRecurring =.)) updateRecurring,
             maybe Nothing (Just . (DreamIsPrivate =.)) updatePrivate,
             maybe Nothing (Just . (DreamIsStarred =.)) updateStarred,
-            maybe Nothing (Just . (\e -> DreamEmotions =. JSONB e)) updateEmotions
+            maybe Nothing (Just . (\e -> DreamEmotions =. JSONB e)) updateEmotions,
+            maybe Nothing (Just . (\l -> DreamLocation =. (Just . JSONB) l)) parsedLocation
           ]
    in runDB $ update dreamKey updates
 
@@ -383,7 +386,7 @@ dreamWithKeys (Entity dreamId Dream {..}, Entity _ UserAccount {..}) =
       dkStarred = dreamIsStarred,
       dkDreamId = dreamId,
       dkDreamerUsername = userAccountUsername,
-      dkDreamerLocation = Nothing, -- TODO: actually parse location
+      dkDreamerLocation = (unJSONB <$> dreamLocation),
       dkDreamerGender = userAccountGender,
       dkDreamerZodiacSign = userAccountZodiacSign
     }

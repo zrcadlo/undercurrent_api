@@ -260,12 +260,16 @@ data NewDream = NewDream
     nightmare :: Bool,
     recurring :: Bool,
     private :: Bool,
-    starred :: Bool
+    starred :: Bool,
+    dreamerLocation :: Maybe APILocation
   }
   deriving (Eq, Show, Generic)
 
-instance FromJSON NewDream
-instance ToJSON NewDream
+instance FromJSON NewDream where
+  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelToSnake}
+
+instance ToJSON NewDream where
+  toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelToSnake}
 
 instance ToSample NewDream where
   toSamples _ =
@@ -281,6 +285,7 @@ instance ToSample NewDream where
         True
         False
         True
+        (Just sampleApiLocation)
 
 data DreamWithUserInfo = DreamWithUserInfo
   { dkTitle :: Text,
@@ -294,7 +299,7 @@ data DreamWithUserInfo = DreamWithUserInfo
     dkStarred :: Bool,
     dkDreamId :: Key Dream,
     dkDreamerUsername :: Username,
-    dkDreamerLocation :: Maybe Text,
+    dkDreamerLocation :: Maybe Location,
     dkDreamerGender :: Maybe Gender,
     dkDreamerZodiacSign :: Maybe ZodiacSign
   }
@@ -323,7 +328,7 @@ instance ToSample DreamWithUserInfo where
           True
           (toSqlKey 42)
           "alpaca.cool69420"
-          (Just "Queens")
+          (Just $ mkLocation (Just "Queens") Nothing (Just "USA"))
           (Just Female)
           (Just Scorpio)
 
@@ -367,7 +372,8 @@ data DreamUpdate = DreamUpdate
     updateNightmare :: Maybe Bool,
     updateRecurring :: Maybe Bool,
     updatePrivate :: Maybe Bool,
-    updateStarred :: Maybe Bool
+    updateStarred :: Maybe Bool,
+    updateDreamerLocation :: Maybe APILocation
   }
   deriving (Eq, Show, Generic)
 
@@ -392,6 +398,7 @@ instance ToSample DreamUpdate where
           (Just False)
           (Just True)
           (Just False)
+          (Just sampleApiLocation)
 
 data Login = Login
   { loginEmail :: Email,
