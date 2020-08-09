@@ -95,7 +95,6 @@ setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
                 zeroTime
 
     _ <- insertMany $ 
-        -- TODO: actually situate in some location!
         [(Dream nena "Nena's dream" "Nena dreams" False False True False False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime (mkJSONLocation "Shenzhen" "China"))
         ,(Dream nena "Nena's secret dream" "Nena dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime (mkJSONLocation "Shenzhen" "China"))
         ]
@@ -296,7 +295,6 @@ spec =
 
             it "responds with 201 if the dream was correctly created" $ do
                 -- TODO: maybe test for the actual response too?
-                -- TODO: test for defaulting to the dreamer's location.
                 authenticatedPost "/api/user/dreams" pacoUserToken
                     [json|{
                         "nightmare":false,
@@ -433,13 +431,22 @@ spec =
                     let pacoDreams = [json|[
                         {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
-                    -- TODO: add location filter test
                     get "/api/dreams?gender=nonBinary"
                         `shouldRespondWith` pacoDreams {matchStatus = 200}
                     get "/api/dreams?zodiac_sign=capricorn"
                         `shouldRespondWith` pacoDreams {matchStatus = 200}
-                    get "/api/dreams?gender=nonBinary&location=Tokyo,%20Japan&zodiac_sign=capricorn"
+                    get "/api/dreams?gender=nonBinary&zodiac_sign=capricorn"
                         `shouldRespondWith` pacoDreams {matchStatus = 200}
+            context "with location filters" $ do
+                it "finds dreams for a given location fragment" $ do
+                    let japanDreams = [json|[]|]
+                        hondurasDreams = [json|[]|]
+                    get "/api/dreams?country=Japan"
+                        `shouldRespondWith` japanDreams {matchStatus = 200}
+                    get "/api/dreams?city=Tokyo"
+                        `shouldRespondWith` japanDreams {matchStatus = 200}                        
+                    get "/api/dreams?city=Tegucigalpa"
+                        `shouldRespondWith` hondurasDreams {matchStatus = 200}
             context "with dream flags" $ do
                 it "finds public dreams that match the given dream flags" $ do
                     let charlieDreams = [json|[

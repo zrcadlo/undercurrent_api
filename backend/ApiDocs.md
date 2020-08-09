@@ -23,9 +23,17 @@ A JWT Token signed with this server's key
      - **Values**: *nena.alpaca*
      - **Description**: A username. Checks existence. If you provide your own, we'll search private dreams too. If none is provide, search all public dreams.
 
-- location
+- city
      - **Values**: *Queens*
-     - **Description**: Filter by location (if not provided, won't affect the filtering.)
+     - **Description**: Filter by city (if not provided, won't affect the filtering.)
+
+- region
+     - **Values**: *New York*
+     - **Description**: Filter by administrative region (state or province) (if not provided, won't affect the filtering.)
+
+- country
+     - **Values**: *USA*
+     - **Description**: Filter by country name (if not provided, won't affect the filtering.)
 
 - gender
      - **Values**: *male, female, nonBinary*
@@ -92,13 +100,13 @@ A JWT Token signed with this server's key
 - A dream with the dream id and dreamer id included (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-[{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
+[{"nightmare":false,"lucid":false,"dreamer_location":{"country":"USA","latitude":null,"city":"Queens","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
 ```
 
 - A dream with the dream id and dreamer id included, A dream with the dream id and dreamer id included (`application/json;charset=utf-8`):
 
 ```javascript
-[{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"},{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
+[{"nightmare":false,"lucid":false,"dreamer_location":{"country":"USA","latitude":null,"city":"Queens","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"},{"nightmare":false,"lucid":false,"dreamer_location":{"country":"USA","latitude":null,"city":"Queens","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}]
 ```
 
 ## POST /api/login
@@ -129,7 +137,7 @@ A JWT Token signed with this server's key
 - Example (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-{"token":"some-long-token","user":{"email":"nena@alpaca.com","location":"Tokyo, Japan","username":"nena.alpaca","zodiac_sign":"Scorpio","birthday":null,"gender":"Female"}}
+{"token":"some-long-token","user":{"email":"nena@alpaca.com","location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"username":"nena.alpaca","zodiac_sign":"Scorpio","birthday":null,"gender":"Female"}}
 ```
 
 ## GET /api/stats
@@ -153,9 +161,17 @@ A JWT Token signed with this server's key
      - **Values**: *nena.alpaca*
      - **Description**: A username. Checks existence. If you provide your own, we'll search private dreams too. If none is provide, search all public dreams.
 
-- location
+- city
      - **Values**: *Queens*
-     - **Description**: Filter by location (if not provided, won't affect the filtering.)
+     - **Description**: Filter by city (if not provided, won't affect the filtering.)
+
+- region
+     - **Values**: *New York*
+     - **Description**: Filter by administrative region (state or province) (if not provided, won't affect the filtering.)
+
+- country
+     - **Values**: *USA*
+     - **Description**: Filter by country name (if not provided, won't affect the filtering.)
 
 - gender
      - **Values**: *male, female, nonBinary*
@@ -239,7 +255,7 @@ A JWT Token signed with this server's key
 - Example (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-{"email":"nena@alpaca.com","location":"Tokyo, Japan","username":"nena.alpaca","zodiac_sign":"Scorpio","birthday":null,"gender":"Female"}
+{"email":"nena@alpaca.com","location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"username":"nena.alpaca","zodiac_sign":"Scorpio","birthday":null,"gender":"Female"}
 ```
 
 ## PUT /api/user
@@ -303,7 +319,7 @@ A JWT Token signed with this server's key
 - Example (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-{"nightmare":false,"lucid":false,"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses"}
+{"nightmare":false,"lucid":false,"dreamer_location":{"latlng":{"lat":1,"lng":0.1},"country_code":"us","country":"USA","administrative":"New York","name":"Manhattan","city":null,"type":"city"},"private":false,"emotions":["joy","intimidated"],"recurring":true,"date":"2020-07-07T00:00:00Z","starred":true,"title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses"}
 ```
 
 ### Response:
@@ -319,7 +335,7 @@ A JWT Token signed with this server's key
 - A dream with the dream id and dreamer id included (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-{"nightmare":false,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}
+{"nightmare":false,"lucid":false,"dreamer_location":{"country":"USA","latitude":null,"city":"Queens","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated"],"recurring":true,"dreamer_zodiac_sign":"Scorpio","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":42,"dreamer_gender":"Female","title":"I dreamed of our alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"alpaca.cool69420"}
 ```
 
 ## DELETE /api/user/dreams/:dreamId
@@ -378,7 +394,7 @@ A JWT Token signed with this server's key
 - All fields are optional; if emotions are sent, they will replace current ones. (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-{"nightmare":false,"lucid":true,"private":true,"emotions":["acceptance"],"recurring":false,"date":null,"starred":false,"title":"I dreamed a dream","description":null}
+{"nightmare":false,"lucid":true,"dreamer_location":{"latlng":{"lat":1,"lng":0.1},"country_code":"us","country":"USA","administrative":"New York","name":"Manhattan","city":null,"type":"city"},"private":true,"emotions":["acceptance"],"recurring":false,"date":null,"starred":false,"title":"I dreamed a dream","description":null}
 ```
 
 ### Response:
@@ -449,7 +465,7 @@ A JWT Token signed with this server's key
 - Example (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-{"email":"paco@alpaca.net","location":"Shenzhen, China","username":"Paco.Alpaco","zodiac_sign":"Capricorn","birthday":"2017-02-14T00:00:00Z","gender":"Male","password":"somePassword"}
+{"email":"paco@alpaca.net","location":{"latlng":{"lat":1,"lng":0.1},"country_code":"us","country":"USA","administrative":"New York","name":"Manhattan","city":null,"type":"city"},"username":"Paco.Alpaco","zodiac_sign":"Capricorn","birthday":"2017-02-14T00:00:00Z","gender":"Male","password":"somePassword"}
 ```
 
 ### Response:
@@ -465,7 +481,7 @@ A JWT Token signed with this server's key
 - Example (`application/json;charset=utf-8`, `application/json`):
 
 ```javascript
-{"token":"some-long-token","user":{"email":"nena@alpaca.com","location":"Tokyo, Japan","username":"nena.alpaca","zodiac_sign":"Scorpio","birthday":null,"gender":"Female"}}
+{"token":"some-long-token","user":{"email":"nena@alpaca.com","location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"username":"nena.alpaca","zodiac_sign":"Scorpio","birthday":null,"gender":"Female"}}
 ```
 
 ## GET /docs

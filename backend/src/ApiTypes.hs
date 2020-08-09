@@ -45,7 +45,9 @@ type KindaProtected =
     -- user filters
     QueryFlag "mine"
     :> QueryParam "username" Username
-    :> QueryParam "location" Text
+    :> QueryParam "city" Text
+    :> QueryParam "region" Text
+    :> QueryParam "country" Text
     :> QueryParam "gender" Gender
     :> QueryParam "zodiac_sign" ZodiacSign
     :>
@@ -68,7 +70,9 @@ type KindaProtected =
     :>
     QueryFlag "mine"
     :> QueryParam "username" Username
-    :> QueryParam "location" Text
+    :> QueryParam "city" Text
+    :> QueryParam "region" Text
+    :> QueryParam "country" Text
     :> QueryParam "gender" Gender
     :> QueryParam "zodiac_sign" ZodiacSign
     :>
@@ -465,9 +469,17 @@ instance ToParam (QueryParams "emotions" EmotionLabel) where
   toParam _ =
     DocQueryParam "emotions" ["joy"] ("Filter by emotions: requires a list, will return dreams that have all the given emotions" <> spiel) List
 
-instance ToParam (QueryParam "location" Text) where
+instance ToParam (QueryParam "city" Text) where
   toParam _ =
-    DocQueryParam "location" ["Queens"] ("Filter by location" <> spiel) Normal
+    DocQueryParam "city" ["Queens"] ("Filter by city" <> spiel) Normal
+
+instance ToParam (QueryParam "region" Text) where
+  toParam _ =
+    DocQueryParam "region" ["New York"] ("Filter by administrative region (state or province)" <> spiel) Normal
+
+instance ToParam (QueryParam "country" Text) where
+  toParam _ =
+    DocQueryParam "country" ["USA"] ("Filter by country name" <> spiel) Normal
 
 instance ToParam (QueryParam "keywords" Text) where
   toParam _ =

@@ -160,8 +160,8 @@ data DreamFilters = DreamFilters
     , filterRecurring :: Maybe Bool
     , filterEmotions :: Maybe [EmotionLabel]
     , filterKeyword :: Maybe Text
+    , filterLocation :: Maybe Location
     -- user properties
-    , filterLocation :: Maybe Text
     , filterGender :: Maybe Gender
     , filterZodiacSign :: Maybe ZodiacSign
     -- range properties
@@ -183,7 +183,7 @@ instance ToSample DreamFilters where
                                         (Just False)
                                         (Just [EmotionLabel "joy"])
                                         (Just "alpacas")
-                                        (Just "Tokyo, Japan")
+                                        (Just $ mkLocation (Just "Tokyo") Nothing (Just "Japan"))
                                         Nothing
                                         Nothing
                                         Nothing
@@ -285,8 +285,8 @@ restrictByDreamFilters dream userAccount DreamFilters{..} = do
                 (webTsQuery $ E.val kw)
         )
         filterKeyword
+    maybeNoConditions (\b -> E.where_ (dream E.^. DreamLocation E.@>. (E.jsonbVal b))) filterLocation
     -- User Account filters
-    --maybeNoConditions (\b -> E.where_ (userAccount E.^. UserAccountLocation E.==. (E.just $ E.val b))) filterLocation
     maybeNoConditions (\g -> E.where_ (userAccount E.^. UserAccountGender E.==. (E.just $ E.val g))) filterGender
     maybeNoConditions (\z -> E.where_ (userAccount E.^. UserAccountZodiacSign E.==. (E.just $ E.val z))) filterZodiacSign
     -- Ranges
