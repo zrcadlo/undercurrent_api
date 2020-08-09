@@ -26,6 +26,7 @@ import RIO.Time (fromGregorian, UTCTime(..))
 import Util
 import Database.Esqueleto.PostgreSQL.JSON (JSONB(..))
 import Helpers
+import qualified Database.Esqueleto.PostgreSQL.JSON as E
 
 noOpLog :: LogFunc
 noOpLog = mkLogFunc $ (\_ _ _ _ -> pure ())
@@ -51,6 +52,9 @@ testApp = do
         in 
             return $ app cfg cookieCfg jwtCfg ctx
 
+mkJSONLocation :: Text  -> Text -> (Maybe (E.JSONB Location))
+mkJSONLocation c co = Just $ E.JSONB $ Location {city = Just c, region = Nothing, country = Just co, latitude = Nothing, longitude = Nothing}
+
 setupData :: IO ()
 setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
     dropModels
@@ -63,7 +67,7 @@ setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
             "Nena Alpaca"
             (Just Female)
             (Just (UTCTime (fromGregorian 2017 2 14) 0))
-            (Just "Tokyo, Japan")
+            (mkJSONLocation "Tokyo" "Japan")
             (Just Scorpio)
             zeroTime
             zeroTime
@@ -74,7 +78,7 @@ setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
                 "Charlie Alpaca"
                 (Just Male)
                 (Just zeroTime)
-                (Just "Queens")
+                (mkJSONLocation "Queens" "US")
                 (Just Cancer)
                 zeroTime
                 zeroTime
@@ -85,23 +89,23 @@ setupData = runNoLoggingT $ withPostgresqlConn testDB . runSqlConn $ do
                 "Paco Alpaca"
                 (Just NonBinary)
                 (Just zeroTime)
-                (Just "Tokyo, Japan")
+                (mkJSONLocation "Tokyo" "Japan")
                 (Just Capricorn)
                 zeroTime
                 zeroTime
 
     _ <- insertMany $ 
-        [(Dream nena "Nena's dream" "Nena dreams" False False True False False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
-        ,(Dream nena "Nena's secret dream" "Nena dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
+        [(Dream nena "Nena's dream" "Nena dreams" False False True False False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime (mkJSONLocation "Shenzhen" "China"))
+        ,(Dream nena "Nena's secret dream" "Nena dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime (mkJSONLocation "Shenzhen" "China"))
         ]
 
     _ <- insertMany $
-        [(Dream charlie "Charlies's dream" "Charlie dreams" False False True False False (JSONB [EmotionLabel "joy", EmotionLabel "surprise"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
-        ,(Dream charlie "Charlie's secret dream" "Charlie dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)
+        [(Dream charlie "Charlies's dream" "Charlie dreams" False False True False False (JSONB [EmotionLabel "joy", EmotionLabel "surprise"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime Nothing)
+        ,(Dream charlie "Charlie's secret dream" "Charlie dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime Nothing)
         ]
 
     _ <- insertMany $
-        [(Dream paco "Paco's secret dream" "Paco dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime)]
+        [(Dream paco "Paco's secret dream" "Paco dreams" False False True True False (JSONB [EmotionLabel "joy"]) (UTCTime (fromGregorian 2017 2 14) 0) zeroTime zeroTime Nothing)]
 
     return ()
 
@@ -143,14 +147,14 @@ spec =
                         username: "Nena Alpaca",
                         gender: "Female",
                         birthday: "2017-02-14T00:00:00Z",
-                        location: "Tokyo, Japan",
+                        location: {city: "Tokyo", country: "Japan", region: null, latitude: null, longitude: null},
                         zodiac_sign: "Scorpio"
                     }|] {matchStatus = 200}
 
         describe "PUT /api/user" $ do
             it "responds successfully when updating email and name" $ do
                 authenticatedPut "/api/user" currentUserToken
-                    [json|{username: "Another Nena", location: "Shenzhen, China", zodiac_sign: "Cancer"}|]
+                    [json|{username: "Another Nena", location: {name: "Shenzhen", country: "China", type: "city"}, zodiac_sign: "Cancer"}|]
                     `shouldRespondWith` 204
 
         describe "PUT /api/user/password" $ do
@@ -177,7 +181,7 @@ spec =
                         "gender":"Male",
                         "username":"Paco Alpaco",
                         "password":"somePassword",
-                        "birthplace":"Shenzhen, China"
+                        "location": {name: "Shenzhen", country: "China", type: "city"}
                     }|]
                     `shouldRespondWith` 409
 
@@ -189,7 +193,7 @@ spec =
                         "gender":"Male",
                         "username":"Paco Alpaco",
                         "password":"somePassword",
-                        "birthplace":"Shenzhen, China"
+                        "location": {name: "Shenzhen", country: "China", type: "city"}
                     }|]
                     `shouldRespondWith` 409                    
 
@@ -201,7 +205,7 @@ spec =
                         "gender":"Male",
                         "username":"CHARLIE ALPACA",
                         "password":"somePassword",
-                        "birthplace":"Shenzhen, China"
+                        "location": {name: "Shenzhen", country: "China", type: "city"}
                     }|]
                     `shouldRespondWith` 409                    
             
@@ -213,7 +217,7 @@ spec =
                         "gender":"Male",
                         "username":"Paco Alpaco",
                         "password":"somePassword",
-                        "birthplace":"Shenzhen, China"
+                        "location": {name: "Shenzhen", country: "China", type: "city"}
                     }|]
                     `shouldRespondWith` 201
 
@@ -235,7 +239,7 @@ spec =
                         "title":"Nena's secret dream",
                         "description":"Nena dreams",
                         "dreamer_username": "Another Nena",
-                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_location": {city: "Shenzhen", country: "China", region: null, latitude: null, longitude: null},
                         "dreamer_zodiac_sign": "Cancer",
                         "dreamer_gender": "Female"},
                         {"nightmare":false,
@@ -249,7 +253,7 @@ spec =
                         "title":"Nena's dream",
                         "description":"Nena dreams",
                         "dreamer_username": "Another Nena",
-                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_location": {city: "Shenzhen", country: "China", region: null, latitude: null, longitude: null},
                         "dreamer_zodiac_sign": "Cancer",
                         "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
@@ -267,7 +271,7 @@ spec =
                         "title":"Nena's secret dream",
                         "description":"Nena dreams",
                         "dreamer_username": "Another Nena",
-                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_location": {city: "Shenzhen", country: "China", region: null, latitude: null, longitude: null},
                         "dreamer_zodiac_sign": "Cancer",
                         "dreamer_gender": "Female"}
                 ]|]
@@ -321,6 +325,7 @@ spec =
                 authenticatedPut "/api/user/dreams/4" charlieUserToken
                     [json|{nightmare: true, emotions: ["vigilant", "worry"], private:false}|]
                     `shouldRespondWith` 204
+            -- TODO: test updating location.
 
         describe "DELETE /api/user/dreams/:dreamId" $ do
             it "responds with 401 if not authenticated" $ do
@@ -351,7 +356,7 @@ spec =
                         "title":"Nena's secret dream",
                         "description":"Nena dreams",
                         "dreamer_username": "Another Nena",
-                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_location": {city: "Shenzhen", country: "China", region: null, latitude: null, longitude: null},
                         "dreamer_zodiac_sign": "Cancer",
                         "dreamer_gender": "Female"},
                         {"nightmare":false,
@@ -365,7 +370,7 @@ spec =
                         "title":"Nena's dream",
                         "description":"Nena dreams",
                         "dreamer_username": "Another Nena",
-                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_location": {city: "Shenzhen", country: "China", region: null, latitude: null, longitude: null},
                         "dreamer_zodiac_sign": "Cancer",
                         "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
@@ -384,7 +389,7 @@ spec =
                         "title":"Nena's dream",
                         "description":"Nena dreams",
                         "dreamer_username": "Another Nena",
-                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_location": {city: "Shenzhen", country: "China", region: null, latitude: null, longitude: null},
                         "dreamer_zodiac_sign": "Cancer",
                         "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
@@ -403,7 +408,7 @@ spec =
                         "title":"Nena's dream",
                         "description":"Nena dreams",
                         "dreamer_username": "Another Nena",
-                        "dreamer_location": "Shenzhen, China",
+                        "dreamer_location": {city: "Shenzhen", country: "China", region: null, latitude: null, longitude: null},
                         "dreamer_zodiac_sign": "Cancer",
                         "dreamer_gender": "Female"
                         }]|] {matchStatus = 200}
@@ -416,7 +421,7 @@ spec =
             context "all recent dreams" $ do
                 it "finds the most recent dreams" $ do
                     let recentDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":"Tokyo, Japan","private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"},{"nightmare":true,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}                        
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"},{"nightmare":true,"lucid":false,"dreamer_location":null,"private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
                     ]|]
                     get "/api/dreams?limit=2"
                         `shouldRespondWith` recentDreams {matchStatus = 200}
@@ -424,20 +429,28 @@ spec =
             context "with user filters" $ do
                 it "finds public dreams that match the user filters" $ do
                     let pacoDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":"Tokyo, Japan","private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
-                    get "/api/dreams?location=Tokyo,%20Japan"
-                        `shouldRespondWith` pacoDreams {matchStatus = 200}
                     get "/api/dreams?gender=nonBinary"
                         `shouldRespondWith` pacoDreams {matchStatus = 200}
                     get "/api/dreams?zodiac_sign=capricorn"
                         `shouldRespondWith` pacoDreams {matchStatus = 200}
-                    get "/api/dreams?gender=nonBinary&location=Tokyo,%20Japan&zodiac_sign=capricorn"
+                    get "/api/dreams?gender=nonBinary&zodiac_sign=capricorn"
                         `shouldRespondWith` pacoDreams {matchStatus = 200}
+            context "with location filters" $ do
+                it "finds dreams for a given location fragment" $ do
+                    let japanDreams = [json|[]|]
+                        hondurasDreams = [json|[]|]
+                    get "/api/dreams?country=Japan"
+                        `shouldRespondWith` japanDreams {matchStatus = 200}
+                    get "/api/dreams?city=Tokyo"
+                        `shouldRespondWith` japanDreams {matchStatus = 200}                        
+                    get "/api/dreams?city=Tegucigalpa"
+                        `shouldRespondWith` hondurasDreams {matchStatus = 200}
             context "with dream flags" $ do
                 it "finds public dreams that match the given dream flags" $ do
                     let charlieDreams = [json|[
-                        {"nightmare":true,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
+                        {"nightmare":true,"lucid":false,"dreamer_location":null,"private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
                     ]|]
                     get "/api/dreams?nightmare=true"
                         `shouldRespondWith` charlieDreams {matchStatus = 200}
@@ -446,39 +459,39 @@ spec =
             context "with complex dream filters" $ do
                 it "finds dreams with the given emotions" $ do
                     let sadPacoDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":"Tokyo, Japan","private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
                     get "/api/dreams?emotions[]=intimidated&emotions[]=joy"
                         `shouldRespondWith` sadPacoDreams {matchStatus = 200}
                 it "finds dreams with the given keywords" $ do
                     let weirdPacoDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":"Tokyo, Japan","private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
                     get "/api/dreams?keywords=Alpaca%20SUNGLASS"
                         `shouldRespondWith` weirdPacoDreams {matchStatus = 200}
             context "with date ranges" $ do
                 it "finds dreams after a given date" $ do
                     let someDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":"Tokyo, Japan","private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
                     get "/api/dreams?after=2020-07-07T00:00:00Z"
                         `shouldRespondWith` someDreams {matchStatus = 200}
                 it "finds dreams before a given date" $ do
                     let someMoreDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":"Tokyo, Japan","private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"},{"nightmare":true,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"},{"nightmare":true,"lucid":false,"dreamer_location":null,"private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
                     ]|]
                     get "/api/dreams?before=2020-07-07T00:00:00Z&limit=2"
                         `shouldRespondWith` someMoreDreams {matchStatus=200}
                 it "finds dreams in a given range" $ do
                     let thoseSameDreams = [json|[
-                        {"nightmare":false,"lucid":false,"dreamer_location":"Tokyo, Japan","private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
+                        {"nightmare":false,"lucid":false,"dreamer_location":{"country":"Japan","latitude":null,"city":"Tokyo","region":null,"longitude":null},"private":false,"emotions":["joy","intimidated","worry"],"recurring":true,"dreamer_zodiac_sign":"Capricorn","date":"2020-07-07T00:00:00Z","starred":true,"dream_id":6,"dreamer_gender":"NonBinary","title":"I dream of Alpacas","description":"Some alpacas were wearing sunglasses","dreamer_username":"Paco Alpaca"}
                     ]|]
                     get "/api/dreams?before=2020-08-01T00:00:00Z&after=2020-07-07T00:00:00Z"
                         `shouldRespondWith` thoseSameDreams {matchStatus=200}
             context "with pagination parameters" $ do
                 it "finds a second page of dreams" $ do
                     let nextDreams = [json|[
-                        {"nightmare":true,"lucid":false,"dreamer_location":"Queens","private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
+                        {"nightmare":true,"lucid":false,"dreamer_location":null,"private":false,"emotions":["vigilant","worry"],"recurring":true,"dreamer_zodiac_sign":"Cancer","date":"2017-02-14T00:00:00Z","starred":false,"dream_id":4,"dreamer_gender":"Male","title":"Charlie's secret dream","description":"Charlie dreams","dreamer_username":"Charlie Alpaca"}
                     ]|]
                     -- without last_seen_id=6, we'd also get Paco's dream; without limit=1,
                     -- we should see two of Charlie's dreams.

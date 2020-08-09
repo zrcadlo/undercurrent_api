@@ -45,7 +45,9 @@ type KindaProtected =
     -- user filters
     QueryFlag "mine"
     :> QueryParam "username" Username
-    :> QueryParam "location" Text
+    :> QueryParam "city" Text
+    :> QueryParam "region" Text
+    :> QueryParam "country" Text
     :> QueryParam "gender" Gender
     :> QueryParam "zodiac_sign" ZodiacSign
     :>
@@ -68,7 +70,9 @@ type KindaProtected =
     :>
     QueryFlag "mine"
     :> QueryParam "username" Username
-    :> QueryParam "location" Text
+    :> QueryParam "city" Text
+    :> QueryParam "region" Text
+    :> QueryParam "country" Text
     :> QueryParam "gender" Gender
     :> QueryParam "zodiac_sign" ZodiacSign
     :>
@@ -99,12 +103,55 @@ type Api auths =
 type AppM = ReaderT App Servant.Handler
 
 -- | "Resource" types
+
+-- | APILocation represents a singular location response from our geolocation service.
+-- The app is encouraged to send the raw response, and we'll transform from that type
+-- into our own Location at the edge. Right now, this type represents a response from
+-- Algolia's Places API:
+-- https://community.algolia.com/places/documentation.html#suggestions
+data APILatLng = APILatLng {
+  lat :: Double
+, lng :: Double
+} deriving (Show, Eq, Generic)
+
+instance FromJSON APILatLng
+instance ToJSON APILatLng
+
+data APILocation = APILocation
+  {
+    algoliaType :: Maybe Text
+  , algoliaName :: Maybe Text
+  , algoliaCity :: Maybe Text
+  , algoliaCountry :: Maybe Text
+  , algoliaCountryCode :: Maybe Text
+  , algoliaAdministrative :: Maybe Text
+  , algoliaLatlng :: Maybe APILatLng
+  } deriving (Show, Eq, Generic)
+
+sampleApiLocation ::APILocation
+sampleApiLocation = 
+  APILocation {
+    algoliaType = Just "city",
+    algoliaName = Just "Manhattan",
+    algoliaCity = Nothing,
+    algoliaCountry = Just "USA",
+    algoliaCountryCode = Just "us",
+    algoliaAdministrative = Just "New York",
+    algoliaLatlng = Just $ APILatLng 1.0 0.1
+  }
+
+instance ToJSON APILocation where
+  toJSON = genericToJSON defaultOptions {fieldLabelModifier = dropPrefix "algolia" }
+
+instance FromJSON APILocation where
+  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = dropPrefix "algolia"}
+
 data NewUserAccount = NewUserAccount
   { username :: Username,
     email :: Email,
     gender :: Maybe Gender,
     birthday :: Maybe UTCTime,
-    location :: Maybe Text,
+    location :: Maybe APILocation,
     zodiacSign :: Maybe ZodiacSign,
     password :: Password
   }
@@ -132,7 +179,7 @@ instance ToSample NewUserAccount where
         "paco@alpaca.net"
         (Just Male)
         (Just (UTCTime (fromGregorian 2017 2 14) 0))
-        (Just "Shenzhen, China")
+        (Just sampleApiLocation)
         (Just Capricorn)
         "secureAlpacaPassword"
 
@@ -141,7 +188,7 @@ data UpdateUserAccount = UpdateUserAccount
     updateEmail :: Maybe Email,
     updateGender :: Maybe Gender,
     updateBirthday :: Maybe UTCTime,
-    updateLocation :: Maybe Text,
+    updateLocation :: Maybe APILocation,
     updateZodiacSign :: Maybe ZodiacSign
   }
   deriving (Show, Generic)
@@ -217,12 +264,16 @@ data NewDream = NewDream
     nightmare :: Bool,
     recurring :: Bool,
     private :: Bool,
-    starred :: Bool
+    starred :: Bool,
+    dreamerLocation :: Maybe APILocation
   }
   deriving (Eq, Show, Generic)
 
-instance FromJSON NewDream
-instance ToJSON NewDream
+instance FromJSON NewDream where
+  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelToSnake}
+
+instance ToJSON NewDream where
+  toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelToSnake}
 
 instance ToSample NewDream where
   toSamples _ =
@@ -238,6 +289,7 @@ instance ToSample NewDream where
         True
         False
         True
+        (Just sampleApiLocation)
 
 data DreamWithUserInfo = DreamWithUserInfo
   { dkTitle :: Text,
@@ -251,7 +303,7 @@ data DreamWithUserInfo = DreamWithUserInfo
     dkStarred :: Bool,
     dkDreamId :: Key Dream,
     dkDreamerUsername :: Username,
-    dkDreamerLocation :: Maybe Text,
+    dkDreamerLocation :: Maybe Location,
     dkDreamerGender :: Maybe Gender,
     dkDreamerZodiacSign :: Maybe ZodiacSign
   }
@@ -280,7 +332,7 @@ instance ToSample DreamWithUserInfo where
           True
           (toSqlKey 42)
           "alpaca.cool69420"
-          (Just "Queens")
+          (Just $ mkLocation (Just "Queens") Nothing (Just "USA"))
           (Just Female)
           (Just Scorpio)
 
@@ -324,7 +376,8 @@ data DreamUpdate = DreamUpdate
     updateNightmare :: Maybe Bool,
     updateRecurring :: Maybe Bool,
     updatePrivate :: Maybe Bool,
-    updateStarred :: Maybe Bool
+    updateStarred :: Maybe Bool,
+    updateDreamerLocation :: Maybe APILocation
   }
   deriving (Eq, Show, Generic)
 
@@ -349,6 +402,7 @@ instance ToSample DreamUpdate where
           (Just False)
           (Just True)
           (Just False)
+          (Just sampleApiLocation)
 
 data Login = Login
   { loginEmail :: Email,
@@ -415,9 +469,17 @@ instance ToParam (QueryParams "emotions" EmotionLabel) where
   toParam _ =
     DocQueryParam "emotions" ["joy"] ("Filter by emotions: requires a list, will return dreams that have all the given emotions" <> spiel) List
 
-instance ToParam (QueryParam "location" Text) where
+instance ToParam (QueryParam "city" Text) where
   toParam _ =
-    DocQueryParam "location" ["Queens"] ("Filter by location" <> spiel) Normal
+    DocQueryParam "city" ["Queens"] ("Filter by city" <> spiel) Normal
+
+instance ToParam (QueryParam "region" Text) where
+  toParam _ =
+    DocQueryParam "region" ["New York"] ("Filter by administrative region (state or province)" <> spiel) Normal
+
+instance ToParam (QueryParam "country" Text) where
+  toParam _ =
+    DocQueryParam "country" ["USA"] ("Filter by country name" <> spiel) Normal
 
 instance ToParam (QueryParam "keywords" Text) where
   toParam _ =
