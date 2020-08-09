@@ -99,6 +99,33 @@ type Api auths =
 type AppM = ReaderT App Servant.Handler
 
 -- | "Resource" types
+
+-- | APILocation represents a singular location response from our geolocation service.
+-- The app is encouraged to send the raw response, and we'll transform from that type
+-- into our own Location at the edge. Right now, this type represents a response from
+-- Algolia's Places API:
+-- https://community.algolia.com/places/documentation.html#suggestions
+data APILatLng = ApiLatLng {
+  lat :: Double
+, lng :: Double
+} deriving (Show, Eq, Generic)
+
+instance FromJSON APILatLng
+
+data APILocation = APILocation
+  {
+    algoliaType :: Maybe Text
+  , algoliaName :: Maybe Text
+  , algoliaCity :: Maybe Text
+  , algoliaCountry :: Maybe Text
+  , algoliaCountryCode :: Maybe Text
+  , algoliaAdministrative :: Maybe Text
+  , algoliaLatlng :: Maybe APILatLng
+  } deriving (Show, Eq, Generic)
+
+instance FromJSON APILocation where
+  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = dropPrefix "algolia"}
+
 data NewUserAccount = NewUserAccount
   { username :: Username,
     email :: Email,

@@ -385,3 +385,15 @@ dreamWithKeys (Entity dreamId Dream {..}, Entity _ UserAccount {..}) =
       dkDreamerGender = userAccountGender,
       dkDreamerZodiacSign = userAccountZodiacSign
     }
+
+parseLocation :: APILocation -> Location
+parseLocation APILocation{..} =
+  Location parsedCity parsedRegion parsedCountry parsedLat parsedLng
+  where
+    parsedCity = case algoliaType of
+        Just "city" -> algoliaName
+        _ -> algoliaCity
+    parsedRegion = algoliaAdministrative
+    parsedCountry = algoliaCountry
+    parsedLat = algoliaLatlng >>= Just . lat
+    parsedLng = algoliaLatlng >>= Just . lng
